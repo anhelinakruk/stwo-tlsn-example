@@ -12,6 +12,7 @@ use crate::blake3::blake3::MSG_SCHEDULE;
 use super::BlakeElements;
 use crate::blake3::round::RoundElements;
 use crate::blake3::{Fu32, N_ROUNDS, STATE_SIZE};
+use crate::bridge::IndexRelation;
 
 /// Applies Blake3 MSG_SCHEDULE permutation `iterations` times to messages
 fn apply_blake3_permutation<F>(messages: &[Fu32<F>; STATE_SIZE], iterations: usize) -> [Fu32<F>; STATE_SIZE]
@@ -36,6 +37,8 @@ pub fn eval_blake_scheduler_constraints<E: EvalAtRow>(
     eval: &mut E,
     blake_lookup_elements: &BlakeElements,
     round_lookup_elements: &RoundElements,
+    index_relation: &IndexRelation,
+    _fibonacci_index: u32,
 ) {
     let messages: [Fu32<E::F>; STATE_SIZE] = std::array::from_fn(|_| eval_next_u32(eval));
     let states: [[Fu32<E::F>; STATE_SIZE]; N_ROUNDS + 1] =
@@ -107,7 +110,17 @@ pub fn eval_blake_scheduler_constraints<E: EvalAtRow>(
         .collect_vec(),
     ));
 
-    // First finalize the paired LogUp columns (rounds + blake)
+    // Index consumption from Bridge (similar to Fibonacci)
+    let index_used = eval.next_trace_mask();
+    let index_multiplicity = eval.next_trace_mask();
+
+    eval.add_to_relation(RelationEntry::new(
+        index_relation,
+        E::EF::from(index_multiplicity),
+        &[index_used]
+    ));
+
+    // Finalize - framework pairs lookups automatically
     eval.finalize_logup_in_pairs();
 
 }

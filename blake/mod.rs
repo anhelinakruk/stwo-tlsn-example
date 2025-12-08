@@ -15,45 +15,28 @@ use stwo_constraint_framework::{relation, EvalAtRow, Relation, RelationEntry};
 use xor_table::{xor12, xor4, xor7, xor8, xor9};
 
 mod air;
-pub mod blake3;
-pub mod preprocessed_columns;
-pub mod round;
-pub mod scheduler;
-pub mod xor_table;
-
-// Re-export for integration
-pub use air::{BlakeComponents, BlakeComponentsForIntegration, BlakeStatement0, BlakeStatement1, AllElements};
-
-#[cfg(test)]
-mod test_our_blake3;
+mod preprocessed_columns;
+mod round;
+mod scheduler;
+mod xor_table;
 
 const STATE_SIZE: usize = 16;
 const MESSAGE_SIZE: usize = 16;
 const N_FELTS_IN_U32: usize = 2;
 const N_ROUND_INPUT_FELTS: usize = (STATE_SIZE + STATE_SIZE + MESSAGE_SIZE) * N_FELTS_IN_U32;
 
-// Parameters for Blake3.
-pub const N_ROUNDS: usize = 7;
+// Parameters for Blake2s. Change these for blake3.
+const N_ROUNDS: usize = 10;
 /// A splitting N_ROUNDS into several powers of 2.
-/// 7 = 4 + 2 + 1 = 2^2 + 2^1 + 2^0
-pub const ROUND_LOG_SPLIT: [u32; 3] = [2, 1, 0];
-
-/// Minimum log_size values for XOR lookup tables.
-/// These represent the trace size requirements (log2 of number of rows) for each XOR table component.
-/// XOR tables precompute XOR operations for different bit widths to avoid expensive range checks in circuit.
-pub const XOR12_MIN_LOG_SIZE: u32 = 16; // XOR table for 12-bit operations
-pub const XOR9_MIN_LOG_SIZE: u32 = 14;  // XOR table for 9-bit operations
-pub const XOR8_MIN_LOG_SIZE: u32 = 12;  // XOR table for 8-bit operations
-pub const XOR7_MIN_LOG_SIZE: u32 = 10;  // XOR table for 7-bit operations
-pub const XOR4_MIN_LOG_SIZE: u32 = 8;   // XOR table for 4-bit operations
+const ROUND_LOG_SPLIT: [u32; 2] = [3, 1];
 
 #[derive(Default)]
-pub struct XorAccums {
-    pub xor12: xor12::XorAccumulator<12, 4>,
-    pub xor9: xor9::XorAccumulator<9, 2>,
-    pub xor8: xor8::XorAccumulator<8, 2>,
-    pub xor7: xor7::XorAccumulator<7, 2>,
-    pub xor4: xor4::XorAccumulator<4, 0>,
+struct XorAccums {
+    xor12: xor12::XorAccumulator<12, 4>,
+    xor9: xor9::XorAccumulator<9, 2>,
+    xor8: xor8::XorAccumulator<8, 2>,
+    xor7: xor7::XorAccumulator<7, 2>,
+    xor4: xor4::XorAccumulator<4, 0>,
 }
 impl XorAccums {
     fn add_input(&mut self, w: u32, a: u32x16, b: u32x16) {
@@ -76,14 +59,14 @@ relation!(XorElements4, 3);
 
 #[derive(Clone)]
 pub struct BlakeXorElements {
-    pub xor12: XorElements12,
-    pub xor9: XorElements9,
-    pub xor8: XorElements8,
-    pub xor7: XorElements7,
-    pub xor4: XorElements4,
+    xor12: XorElements12,
+    xor9: XorElements9,
+    xor8: XorElements8,
+    xor7: XorElements7,
+    xor4: XorElements4,
 }
 impl BlakeXorElements {
-    pub fn draw(channel: &mut impl Channel) -> Self {
+    fn draw(channel: &mut impl Channel) -> Self {
         Self {
             xor12: XorElements12::draw(channel),
             xor9: XorElements9::draw(channel),

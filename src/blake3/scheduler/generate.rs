@@ -7,7 +7,7 @@ use stwo::core::fields::qm31::SecureField;
 use stwo::core::poly::circle::CanonicCoset;
 use stwo::core::ColumnVec;
 use stwo::prover::backend::simd::column::BaseColumn;
-use stwo::prover::backend::simd::m31::LOG_N_LANES;
+use stwo::prover::backend::simd::m31::{PackedBaseField, LOG_N_LANES};
 use stwo::prover::backend::simd::qm31::PackedSecureField;
 use stwo::prover::backend::simd::SimdBackend;
 use stwo::prover::backend::Column;
@@ -48,6 +48,7 @@ impl BlakeSchedulerLookupData {
 pub fn gen_trace(
     log_size: u32,
     inputs: &[BlakeInput],
+    fibonacci_index: u32,
 ) -> (
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     BlakeSchedulerLookupData,
@@ -58,10 +59,9 @@ pub fn gen_trace(
     let mut round_inputs = Vec::with_capacity(inputs.len() * N_ROUNDS);
 
     // Calculate number of columns:
-    // 16*2 (messages) + 16*2 (initial_v) + 7*16*2 (v after each round)
-    // = 32 + 32 + 224 = 288 columns
-    // NOTE: fibonacci_index is NOT in trace - it's passed as a constant in BlakeSchedulerEval
-    let n_cols = STATE_SIZE * 2 + STATE_SIZE * 2 + N_ROUNDS * STATE_SIZE * 2;
+    // 16*2 (messages) + 16*2 (initial_v) + 7*16*2 (v after each round) + 2 (index columns)
+    // = 32 + 32 + 224 + 2 = 290 columns
+    let n_cols = STATE_SIZE * 2 + STATE_SIZE * 2 + N_ROUNDS * STATE_SIZE * 2 + 2;
 
     let mut trace = (0..n_cols)
         .map(|_| unsafe { BaseColumn::uninitialized(1 << log_size) })
@@ -118,6 +118,20 @@ pub fn gen_trace(
         ]
         .enumerate()
         .for_each(|(i, val)| lookup_data.blake_lookups[i].data[vec_row] = val);
+
+        // Index columns: set only in first row (vec_row == 0)
+        let index_col_start = n_cols - 2;
+        if vec_row == 0 {
+            trace[index_col_start].data[vec_row] = unsafe { PackedBaseField::from_simd_unchecked(
+                u32x16::splat(fibonacci_index)
+            ) };
+            trace[index_col_start + 1].data[vec_row] = unsafe { PackedBaseField::from_simd_unchecked(
+                u32x16::splat(1)  // multiplicity = 1
+            ) };
+        } else {
+            trace[index_col_start].data[vec_row] = PackedBaseField::zero();
+            trace[index_col_start + 1].data[vec_row] = PackedBaseField::zero();
+        }
     }
 
     // --- DEBUG / ASERCJE SANITY CHECK dla gen_trace ---
@@ -177,6 +191,8 @@ pub fn gen_interaction_trace(
     lookup_data: BlakeSchedulerLookupData,
     round_lookup_elements: &RoundElements,
     blake_lookup_elements: &BlakeElements,
+    index_trace: &ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
+    index_relation: &crate::bridge::IndexRelation,
 ) -> (
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     SecureField,
@@ -224,6 +240,27 @@ pub fn gen_interaction_trace(
                 col_gen.write_frac(vec_row, PackedSecureField::zero(), p_blake);
             }
         }
+        col_gen.finalize_col();
+    }
+
+    // Index consumption logup (similar to fibonacci)
+    {
+        let mut col_gen = logup_gen.new_col();
+
+        let n_cols = index_trace.len();
+        let index_used_col = &index_trace[n_cols - 2];
+        let multiplicity_col = &index_trace[n_cols - 1];
+
+        for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {
+            let index_packed = index_used_col.values.data[vec_row];
+            let multiplicity_packed = multiplicity_col.values.data[vec_row];
+
+            let denom = index_relation.combine(&[PackedSecureField::from(index_packed)]);
+            let numerator = PackedSecureField::from(multiplicity_packed);
+
+            col_gen.write_frac(vec_row, numerator, denom);
+        }
+
         col_gen.finalize_col();
     }
 

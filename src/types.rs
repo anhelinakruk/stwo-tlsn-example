@@ -104,23 +104,23 @@ pub fn verify_fibonacci_index_commitment(
     tracing::info!("  Blinder: {}", hex::encode(blinder));
 
     // Compute hash(index_bytes + blinder) using BLAKE3
-    // let mut hasher = blake3::Hasher::new();
-    // hasher.update(index_bytes);
-    // hasher.update(blinder);
-    // let computed_hash = hasher.finalize();
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(index_bytes);
+    hasher.update(blinder);
+    let computed_hash = hasher.finalize();
 
-    // tracing::info!("  Computed hash: {}", hex::encode(computed_hash.as_bytes()));
+    tracing::info!("  Computed hash: {}", hex::encode(computed_hash.as_bytes()));
 
-    // // Verify computed hash matches committed hash
-    // if committed_hash != computed_hash.as_bytes() {
-    //     tracing::error!(
-    //         "Hash verification failed for fibonacci_index {}",
-    //         fibonacci_index
-    //     );
-    //     tracing::error!("  Expected (committed): {}", hex::encode(committed_hash));
-    //     tracing::error!("  Computed:             {}", hex::encode(computed_hash.as_bytes()));
-    //     return Err("Computed hash does not match committed hash".into());
-    // }
+    // Verify computed hash matches committed hash
+    if committed_hash != computed_hash.as_bytes() {
+        tracing::error!(
+            "Hash verification failed for fibonacci_index {}",
+            fibonacci_index
+        );
+        tracing::error!("  Expected (committed): {}", hex::encode(committed_hash));
+        tracing::error!("  Computed:             {}", hex::encode(computed_hash.as_bytes()));
+        return Err("Computed hash does not match committed hash".into());
+    }
 
     tracing::info!(
         "✓ Hash commitment verified for fibonacci_index {}: {}",

@@ -2875,6 +2875,7 @@ name = "stwo-tlsn-example"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "blake3",
  "hex",
  "http-body-util",
  "hyper",

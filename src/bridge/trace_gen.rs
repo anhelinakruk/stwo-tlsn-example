@@ -17,7 +17,7 @@ use crate::bridge::IndexRelation;
 pub fn gen_bridge_trace(
     log_size: u32,
     fibonacci_index: usize,
-    num_consumers: usize, 
+    num_consumers: usize,
 ) -> ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>> {
     let n_rows = 1 << log_size;
     let index_value = BaseField::from_u32_unchecked(fibonacci_index as u32);

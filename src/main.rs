@@ -18,7 +18,8 @@ pub mod blake3;
 
 #[cfg(test)]
 mod bridge_fib_test;
-// mod full_test;
+mod blake_solo_test;
+mod full_test;
 
 const TEST_SERVER_DOMAIN: &str = "localhost";
 const TEST_SERVER_PORT: u16 = 3000;
@@ -51,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         verifier(verifier_socket, verifier_extra_socket, &server_domain)
     )?;
 
-    println!("✅ Successfully verified {}", &uri);
+    println!("Successfully verified {}", &uri);
 
     println!(
         "Verified sent data:\n{}",
