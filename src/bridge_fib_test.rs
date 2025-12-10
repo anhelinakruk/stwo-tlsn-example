@@ -129,21 +129,14 @@ mod tests {
         let log_size = 10;
         let fibonacci_index = 100;
 
-        println!("\n=== Step 1: Generate traces ===");
-
-        // Generate Bridge trace with multiplicity=1 (only Fibonacci consumes)
         let bridge_trace = gen_bridge_trace(log_size, fibonacci_index, 1);
-        println!("✓ Bridge trace generated: {} columns", bridge_trace.len());
+        println!("Bridge trace generated: {} columns", bridge_trace.len());
 
-        // Generate Fibonacci trace
         let (fib_trace, fibonacci_value) = gen_fib_trace(log_size, fibonacci_index);
-        println!("✓ Fibonacci trace generated: {} columns", fib_trace.len());
-        println!("  Fibonacci({}) = {}", fibonacci_index, fibonacci_value);
+        println!("Fibonacci trace generated: {} columns", fib_trace.len());
+        println!("Fibonacci({}) = {}", fibonacci_index, fibonacci_value);
 
-        // Generate preprocessed is_first column for Fibonacci
         let is_first_col = gen_is_first_column(log_size);
-
-        println!("\n=== Step 2: Setup prover ===");
 
         let config = PcsConfig::default();
         let twiddles = SimdBackend::precompute_twiddles(
@@ -156,60 +149,38 @@ mod tests {
         let mut commitment_scheme =
             CommitmentSchemeProver::<SimdBackend, Blake2sMerkleChannel>::new(config, &twiddles);
 
-        println!("\n=== Step 3: Commit preprocessed traces ===");
-
-        // This creates ONE commitment containing both components' preprocessed traces
         let mut tree_builder = commitment_scheme.tree_builder();
-        tree_builder.extend_evals([]);  // Bridge (empty)
-        tree_builder.extend_evals(vec![is_first_col]);  // Fibonacci
+        tree_builder.extend_evals([]);  
+        tree_builder.extend_evals(vec![is_first_col]);
         tree_builder.commit(prover_channel);
-        println!("✓ Preprocessed traces committed (Bridge: empty, Fibonacci: is_first)");
 
-        println!("\n=== Step 4: Commit main traces ===");
-        // This creates ONE commitment containing both components' base traces
         let mut tree_builder = commitment_scheme.tree_builder();
-        tree_builder.extend_evals(bridge_trace.clone());  // Bridge (2 columns)
-        tree_builder.extend_evals(fib_trace.clone());  // Fibonacci (6 columns)
+        tree_builder.extend_evals(bridge_trace.clone()); 
+        tree_builder.extend_evals(fib_trace.clone());
         tree_builder.commit(prover_channel);
-        println!("✓ Base traces committed (Bridge: 2 cols, Fibonacci: 6 cols)");
 
-        println!("\n=== Step 5: Draw interaction elements ===");
-
-        // NOW draw random elements for IndexRelation (LogUp)
         let index_elements = IndexRelation::draw(prover_channel);
 
-        println!("\n=== Step 6: Generate interaction traces ===");
-
-        // Generate Bridge interaction trace (AFTER drawing elements)
         let (bridge_interaction_trace, bridge_claimed_sum) =
             gen_bridge_interaction_trace(&bridge_trace, &index_elements);
-        println!("✓ Bridge interaction trace: {} columns", bridge_interaction_trace.len());
-        println!("  Bridge claimed sum: {:?}", bridge_claimed_sum);
+        println!("Bridge interaction trace: {} columns", bridge_interaction_trace.len());
+        println!("Bridge claimed sum: {:?}", bridge_claimed_sum);
 
-        // Generate Fibonacci interaction trace
         let (fib_interaction_trace, fib_claimed_sum) =
             gen_fib_interaction_trace(&fib_trace, &index_elements);
-        println!("✓ Fibonacci interaction trace: {} columns", fib_interaction_trace.len());
-        println!("  Fibonacci claimed sum: {:?}", fib_claimed_sum);
+        println!("Fibonacci interaction trace: {} columns", fib_interaction_trace.len());
+        println!("Fibonacci claimed sum: {:?}", fib_claimed_sum);
 
-        // Verify LogUp balance: Bridge sum + Fibonacci sum should be 0
         let total_sum = bridge_claimed_sum + fib_claimed_sum;
-        println!("  Total LogUp sum (should be ~0): {:?}", total_sum);
+        println!("Total LogUp sum (should be ~0): {:?}", total_sum);
 
-        println!("\n=== Step 7: Commit interaction traces ===");
-        // This creates ONE commitment containing both components' interaction traces
         let mut tree_builder = commitment_scheme.tree_builder();
-        tree_builder.extend_evals(bridge_interaction_trace);  // Bridge (4 columns)
-        tree_builder.extend_evals(fib_interaction_trace);  // Fibonacci (4 columns)
+        tree_builder.extend_evals(bridge_interaction_trace);  
+        tree_builder.extend_evals(fib_interaction_trace); 
         tree_builder.commit(prover_channel);
-        println!("✓ Interaction traces committed (Bridge: 4 cols, Fibonacci: 4 cols)");
 
-        println!("\n=== Step 8: Create components AFTER all commits ===");
-        // IMPORTANT: Create components AFTER commitments!
-        // Create components with shared TraceLocationAllocator
         let mut tree_span_provider = TraceLocationAllocator::default();
 
-        // Create Bridge component
         let bridge_component = IndexBridgeComponent::new(
             &mut tree_span_provider,
             IndexBridgeEval {
@@ -219,10 +190,9 @@ mod tests {
             },
             bridge_claimed_sum,
         );
-        println!("✓ Bridge component created");
-        println!("  Bridge trace_log_degree_bounds: {:?}", bridge_component.trace_log_degree_bounds());
+        println!("Bridge component created");
+        println!("Bridge trace_log_degree_bounds: {:?}", bridge_component.trace_log_degree_bounds());
 
-        // Create Fibonacci component
         let fib_component = crate::fibonacci::SimpleFibComponent::new(
             &mut tree_span_provider,
             FibEval {
@@ -233,10 +203,9 @@ mod tests {
             },
             fib_claimed_sum,
         );
-        println!("✓ Fibonacci component created");
-        println!("  Fibonacci trace_log_degree_bounds: {:?}", fib_component.trace_log_degree_bounds());
+        println!("Fibonacci component created");
+        println!("Fibonacci trace_log_degree_bounds: {:?}", fib_component.trace_log_degree_bounds());
 
-        println!("\n=== Step 9: Generate proof ===");
         let proof = prove::<SimdBackend, Blake2sMerkleChannel>(
             &[&bridge_component, &fib_component],
             prover_channel,
@@ -244,33 +213,26 @@ mod tests {
         )
         .expect("Failed to generate proof");
 
-        println!("✅ PROOF GENERATED!");
-        println!("  Proof size: {} commitments", proof.commitments.len());
-
-        println!("\n=== Step 10: Verify proof ===");
+        println!("PROOF GENERATED!");
+        println!("Proof size: {} commitments", proof.commitments.len());
 
         let verifier_channel = &mut Blake2sChannel::default();
         let commitment_scheme_verifier =
             &mut CommitmentSchemeVerifier::<Blake2sMerkleChannel>::new(config);
 
-        // Commit to traces in same order as prover
         let bridge_sizes = bridge_component.trace_log_degree_bounds();
         let fib_sizes = fib_component.trace_log_degree_bounds();
 
-        // For verifier, we need to combine the size information from both components
-        // Preprocessed: Bridge[] + Fibonacci[10]
         let combined_preprocessed_sizes: Vec<u32> = bridge_sizes[0]
             .iter()
             .chain(fib_sizes[0].iter())
             .copied()
             .collect();
-        // Base: Bridge[10,10] + Fibonacci[10,10,10,10,10,10]
         let combined_base_sizes: Vec<u32> = bridge_sizes[1]
             .iter()
             .chain(fib_sizes[1].iter())
             .copied()
             .collect();
-        // Interaction: Bridge[10,10,10,10] + Fibonacci[10,10,10,10]
         let combined_interaction_sizes: Vec<u32> = bridge_sizes[2]
             .iter()
             .chain(fib_sizes[2].iter())
@@ -289,6 +251,6 @@ mod tests {
         )
         .expect("Verification failed");
 
-        println!("✅ PROOF VERIFIED SUCCESSFULLY!");
+        println!("PROOF VERIFIED SUCCESSFULLY!");
     }
 }

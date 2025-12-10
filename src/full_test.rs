@@ -23,7 +23,6 @@ mod tests {
         let log_size = 4;
         let fibonacci_index = 5;
 
-        println!("Step 1: generate bridge fibonacci traces");
         let bridge_trace = gen_bridge_trace(log_size, fibonacci_index, 2);
         println!("Bridge trace: {} columns", bridge_trace.len());
 
@@ -33,18 +32,13 @@ mod tests {
 
         let is_first_col_fib = gen_is_first_column(log_size);
 
-        println!("Step 2: Generate all Blake3 traces");
-        // Blake3 will share Fibonacci's is_first column
-
         let blake_inputs = prepare_blake_inputs(log_size, fibonacci_index);
 
-        // Scheduler trace
         let fibonacci_index = 100;
         let (scheduler_trace, scheduler_lookup_data, round_inputs) =
             scheduler::gen_trace(log_size, &blake_inputs, fibonacci_index);
         println!("Blake scheduler trace: {} columns", scheduler_trace.len());
 
-        // Round traces
         let mut xor_accums = XorAccums::default();
         let mut rest = &round_inputs[..];
         let (round_traces, round_lookup_data): (Vec<_>, Vec<_>) =
@@ -55,7 +49,6 @@ mod tests {
             }));
         println!("Blake round traces: {} components", round_traces.len());
 
-        // XOR table traces
         let (xor_trace12, xor_lookup_data12) = xor_table::xor12::generate_trace(xor_accums.xor12);
         let (xor_trace9, xor_lookup_data9) = xor_table::xor9::generate_trace(xor_accums.xor9);
         let (xor_trace8, xor_lookup_data8) = xor_table::xor8::generate_trace(xor_accums.xor8);
@@ -63,10 +56,8 @@ mod tests {
         let (xor_trace4, xor_lookup_data4) = xor_table::xor4::generate_trace(xor_accums.xor4);
         println!("Blake XOR tables: 5 tables generated");
 
-        println!("Step 3: Setup Prover");
         let config = PcsConfig::default();
 
-        // Calculate max log size for twiddles (need to handle XOR tables which can be large)
         const XOR_TABLE_MAX_LOG_SIZE: u32 = 16;
         let log_max_rows = (log_size + *ROUND_LOG_SPLIT.iter().max().unwrap()).max(XOR_TABLE_MAX_LOG_SIZE);
         let twiddles = SimdBackend::precompute_twiddles(
@@ -77,16 +68,10 @@ mod tests {
 
         let prover_channel = &mut Blake2sChannel::default();
         let mut commitment_scheme = CommitmentSchemeProver::<SimdBackend, Blake2sMerkleChannel>::new(config, &twiddles);
-
-        // ========== STEP 4: Commit preprocessed traces ==========
-        println!("\nStep 4: Commit preprocessed traces");
-
-        // Commit preprocessed traces - each component separately
-        // NOTE: Fibonacci and Blake3 SHARE the same is_first column
+  
         let mut tree_builder = commitment_scheme.tree_builder();
-        tree_builder.extend_evals([]);  // Bridge: no preprocessed
-        tree_builder.extend_evals(vec![is_first_col_fib.clone()]);  // Fibonacci & Blake3: shared is_first
-        // Blake3: 15 XOR tables
+        tree_builder.extend_evals([]); 
+        tree_builder.extend_evals(vec![is_first_col_fib.clone()]);  
         tree_builder.extend_evals(
             vec![
                 XorTable::new(12, 4, 0).generate_constant_trace(),
@@ -109,16 +94,12 @@ mod tests {
         tree_builder.commit(prover_channel);
         println!("✓ Preprocessed traces committed");
 
-        println!("Step 5: Commit main traces");
         let mut tree_builder = commitment_scheme.tree_builder();
 
-        // Clone scheduler_trace for interaction generation
         let scheduler_trace_for_interaction = scheduler_trace.clone();
 
-        // Each component separately
-        tree_builder.extend_evals(bridge_trace.clone());  // Bridge
-        tree_builder.extend_evals(fib_trace.clone());  // Fibonacci
-        // Blake3: scheduler + rounds + XOR tables
+        tree_builder.extend_evals(bridge_trace.clone()); 
+        tree_builder.extend_evals(fib_trace.clone()); 
         tree_builder.extend_evals(
             vec![scheduler_trace]
                 .into_iter()
@@ -135,22 +116,20 @@ mod tests {
         );
 
         tree_builder.commit(prover_channel);
-        println!("✓ Base traces committed");
+        println!("Base traces committed");
 
-        println!("Step 6: Draw interaction elements");
         let index_elements = IndexRelation::draw(prover_channel);
         let round_elements = RoundElements::draw(prover_channel);
         let blake_elements = BlakeElements::draw(prover_channel);
         let xor_elements = BlakeXorElements::draw(prover_channel);
         println!("All lookup elements drawn");
 
-        println!("Step 7: Generate interaction traces");
         let (bridge_interaction_trace, bridge_claimed_sum) =
             gen_bridge_interaction_trace(&bridge_trace, &index_elements);
-        println!("✓ Bridge: {} columns, sum = {:?}", bridge_interaction_trace.len(), bridge_claimed_sum);
+        println!("Bridge: {} columns, sum = {:?}", bridge_interaction_trace.len(), bridge_claimed_sum);
         let (fib_interaction_trace, fib_claimed_sum) =
             gen_fib_interaction_trace(&fib_trace, &index_elements);
-        println!("✓ Fibonacci: {} columns, sum = {:?}", fib_interaction_trace.len(), fib_claimed_sum);
+        println!("Fibonacci: {} columns, sum = {:?}", fib_interaction_trace.len(), fib_claimed_sum);
         let (scheduler_interaction_trace, scheduler_claimed_sum) = scheduler::gen_interaction_trace(
             log_size,
             scheduler_lookup_data,
@@ -161,7 +140,6 @@ mod tests {
         );
         println!("Blake scheduler: {} columns, sum = {:?}", scheduler_interaction_trace.len(), scheduler_claimed_sum);
 
-        // Blake3 rounds interaction
         let (round_interaction_traces, round_claimed_sums): (Vec<_>, Vec<_>) = multiunzip(
             ROUND_LOG_SPLIT
                 .iter()
@@ -177,7 +155,6 @@ mod tests {
         );
         println!("Blake rounds: {} components", round_interaction_traces.len());
 
-        // Blake3 XOR tables interaction
         let (xor_interaction12, xor12_claimed_sum) = xor_table::xor12::generate_interaction_trace(
             xor_lookup_data12,
             &xor_elements.xor12,
@@ -200,7 +177,6 @@ mod tests {
         );
         println!("Blake XOR tables: 5 interaction traces");
 
-        // Check total LogUp sum - with detailed breakdown
         println!("\n=== CLAIMED SUM BREAKDOWN ===");
         println!("Scheduler:     {:?}", scheduler_claimed_sum);
         for (i, sum) in round_claimed_sums.iter().enumerate() {
@@ -235,10 +211,8 @@ mod tests {
         println!("Step 8: Commit interaction traces");
         let mut tree_builder = commitment_scheme.tree_builder();
 
-        // Each component separately
-        tree_builder.extend_evals(bridge_interaction_trace);  // Bridge
-        tree_builder.extend_evals(fib_interaction_trace);  // Fibonacci
-        // Blake3: scheduler + rounds + XOR tables
+        tree_builder.extend_evals(bridge_interaction_trace); 
+        tree_builder.extend_evals(fib_interaction_trace); 
         tree_builder.extend_evals(
             vec![scheduler_interaction_trace]
                 .into_iter()
@@ -259,17 +233,11 @@ mod tests {
 
         println!("\n========== STEP 9: Create components ==========");
 
-        // Collect all preprocessed column IDs in the order they were committed
-        use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
         use crate::blake3::preprocessed_columns::XorTable;
         let mut all_preprocessed_ids = vec![];
 
-        // Bridge: no preprocessed columns (empty)
-
-        // Fibonacci & Blake3: shared is_first (both use same column ID)
         all_preprocessed_ids.push(is_first_column_id(log_size));
 
-        // Blake3: 15 XOR tables - must match the order in preprocessed commit
         all_preprocessed_ids.push(XorTable::new(12, 4, 0).id());
         all_preprocessed_ids.push(XorTable::new(12, 4, 1).id());
         all_preprocessed_ids.push(XorTable::new(12, 4, 2).id());
@@ -318,7 +286,7 @@ mod tests {
             &xor_elements,
             &index_elements,
             fibonacci_index as u32,
-            is_first_column_id(log_size),  // Share Fibonacci's is_first column
+            is_first_column_id(log_size),  
             scheduler_claimed_sum,
             &round_claimed_sums,
             xor12_claimed_sum,
@@ -353,8 +321,7 @@ mod tests {
         println!("PROOF GENERATED!");
         println!("Proof size: {} commitments", proof.commitments.len());
 
-        // TODO: Add verification later
-        println!("Proof generation test PASSED!");
+        println!("Proof generation passed");
     }
     
 }

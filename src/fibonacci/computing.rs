@@ -54,20 +54,14 @@ impl FrameworkEval for FibEval {
         // CONSTRAINT 6: is_target is boolean (0 or 1)
         eval.add_constraint(is_target_curr.clone() * (is_target_curr.clone() - E::F::one()));
 
-        // CONSTRAINT 7: is_target sums to exactly 1 (using running sum technique)
-        // We verify: is_target transitions from 0 to 1 at most once
-        // This ensures exactly one row has is_target = 1
-        // Constraint: is_target_curr * is_target_prev == 0 (can't have two consecutive 1s)
-        // Combined with: is_target is boolean and sum check
+        // CONSTRAINT 7: is_target sums to exactly 1 
         eval.add_constraint(not_first.clone() * is_target_curr.clone() * is_target_prev);
 
         // CONSTRAINT 8: At target row, verify a = fibonacci_value
-        // This is the KEY constraint! Verifier doesn't know WHICH row, but knows
-        // that SOME row (marked by is_target=1) has the correct Fibonacci value
         let expected_value = E::F::from(BaseField::from_u32_unchecked(self.fibonacci_value));
         eval.add_constraint(is_target_curr.clone() * (a_curr.clone() - expected_value));
 
-        // Logup z Bridge
+        // Logup Bridge
         eval.add_to_relation(RelationEntry::new(
             &self.index_relation,
             E::EF::from(index_multiplicity), 
