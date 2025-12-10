@@ -1008,6 +1008,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "example1"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "blake3",
+ "hex",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "itertools 0.13.0",
+ "num-traits",
+ "serde",
+ "serde_json",
+ "spansy",
+ "stwo",
+ "stwo-constraint-framework",
+ "test-log",
+ "tlsn",
+ "tlsn-attestation",
+ "tlsn-core",
+ "tlsn-server-fixture",
+ "tlsn-server-fixture-certs",
+ "tlsn-tls-core",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "ff"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2868,37 +2899,6 @@ dependencies = [
  "std-shims",
  "stwo",
  "tracing",
-]
-
-[[package]]
-name = "stwo-tlsn-example"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "blake3",
- "hex",
- "http-body-util",
- "hyper",
- "hyper-util",
- "itertools 0.13.0",
- "num-traits",
- "serde",
- "serde_json",
- "spansy",
- "stwo",
- "stwo-constraint-framework",
- "test-log",
- "tlsn",
- "tlsn-attestation",
- "tlsn-core",
- "tlsn-server-fixture",
- "tlsn-server-fixture-certs",
- "tlsn-tls-core",
- "tokio",
- "tokio-rustls",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
