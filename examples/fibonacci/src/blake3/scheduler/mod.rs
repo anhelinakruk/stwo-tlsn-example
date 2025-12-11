@@ -2,7 +2,7 @@ mod constraints;
 mod generate;
 
 use constraints::eval_blake_scheduler_constraints;
-pub use generate::{gen_interaction_trace, gen_trace, BlakeInput};
+pub use generate::{BlakeInput, gen_interaction_trace, gen_trace};
 use num_traits::One;
 use num_traits::Zero;
 use stwo::core::fields::m31::BaseField;
@@ -11,17 +11,17 @@ use stwo::core::poly::circle::CanonicCoset;
 use stwo::core::utils::bit_reverse_coset_to_circle_domain_order;
 use stwo::prover::backend::simd::SimdBackend;
 use stwo::prover::backend::{Col, Column};
-use stwo::prover::poly::circle::CircleEvaluation;
 use stwo::prover::poly::BitReversedOrder;
+use stwo::prover::poly::circle::CircleEvaluation;
 use stwo_constraint_framework::{
-    preprocessed_columns::PreProcessedColumnId, relation, EvalAtRow, FrameworkComponent,
-    FrameworkEval,
+    EvalAtRow, FrameworkComponent, FrameworkEval, preprocessed_columns::PreProcessedColumnId,
+    relation,
 };
 
 use crate::fibonacci::ValueRelation;
 
-use super::round::RoundElements;
 use super::N_ROUND_INPUT_FELTS;
+use super::round::RoundElements;
 
 pub type BlakeSchedulerComponent = FrameworkComponent<BlakeSchedulerEval>;
 

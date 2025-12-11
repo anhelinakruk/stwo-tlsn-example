@@ -2,15 +2,13 @@ mod constraints;
 mod generate;
 
 use constraints::eval_blake_scheduler_constraints;
-pub use generate::{gen_interaction_trace, gen_trace, BlakeInput};
+pub use generate::{BlakeInput, gen_interaction_trace, gen_trace};
 use num_traits::Zero;
 use stwo::core::fields::qm31::SecureField;
-use stwo_constraint_framework::{
-    relation, EvalAtRow, FrameworkComponent, FrameworkEval,
-};
+use stwo_constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval, relation};
 
-use super::round::RoundElements;
 use super::N_ROUND_INPUT_FELTS;
+use super::round::RoundElements;
 use crate::bridge::InputRelation;
 
 pub type BlakeSchedulerComponent = FrameworkComponent<BlakeSchedulerEval>;
@@ -69,7 +67,7 @@ mod tests {
     use stwo_constraint_framework::FrameworkEval;
 
     use crate::blake3::round::RoundElements;
-    use crate::blake3::scheduler::r#generate::{gen_interaction_trace, gen_trace, BlakeInput};
+    use crate::blake3::scheduler::r#generate::{BlakeInput, gen_interaction_trace, gen_trace};
     use crate::blake3::scheduler::{BlakeElements, BlakeSchedulerEval};
     use crate::bridge::InputRelation;
 
@@ -88,7 +86,7 @@ mod tests {
                     m: std::array::from_fn(|i| Simd::splat((i + 1) as u32)),
                 })
                 .collect_vec(),
-            0,  // fibonacci_index = 0 for test
+            0, // fibonacci_index = 0 for test
         );
 
         let round_lookup_elements = RoundElements::dummy();

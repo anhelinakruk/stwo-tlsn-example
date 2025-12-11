@@ -1,17 +1,17 @@
 mod computing;
 mod trace_gen;
 
-pub use computing::{FibEval, FibComponent};
+pub use computing::{FibComponent, FibEval};
 use num_traits::One;
-pub use trace_gen::{gen_fib_trace, gen_fib_interaction_trace};
+pub use trace_gen::{gen_fib_interaction_trace, gen_fib_trace};
 
 use stwo::core::fields::m31::BaseField;
 use stwo::core::poly::circle::CanonicCoset;
 use stwo::core::utils::bit_reverse_coset_to_circle_domain_order;
 use stwo::prover::backend::simd::SimdBackend;
 use stwo::prover::backend::{Col, Column};
-use stwo::prover::poly::circle::CircleEvaluation;
 use stwo::prover::poly::BitReversedOrder;
+use stwo::prover::poly::circle::CircleEvaluation;
 use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
 use stwo_constraint_framework::relation;
 
@@ -40,14 +40,16 @@ pub fn is_first_column_id(log_size: u32) -> PreProcessedColumnId {
 
 pub fn gen_is_target_column(
     log_size: u32,
-    index: usize
+    index: usize,
 ) -> CircleEvaluation<SimdBackend, BaseField, BitReversedOrder> {
     let n_rows = 1 << log_size;
 
     assert!(
         index < n_rows,
         "fibonacci_index ({}) must be less than n_rows (2^{} = {})",
-        index, log_size, n_rows
+        index,
+        log_size,
+        n_rows
     );
 
     let mut col = Col::<SimdBackend, BaseField>::zeros(n_rows);

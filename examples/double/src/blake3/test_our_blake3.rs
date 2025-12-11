@@ -2,8 +2,8 @@
 
 #[cfg(test)]
 mod tests {
-    use std::simd::u32x16;
     use crate::blake3::blake3;
+    use std::simd::u32x16;
 
     #[test]
     fn test_our_blake3_with_123() {
@@ -25,8 +25,8 @@ mod tests {
 
         // Blake3 IV
         const IV: [u32; 8] = [
-            0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A,
-            0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
+            0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB,
+            0x5BE0CD19,
         ];
 
         // Initialize state for Blake3 compression
@@ -37,10 +37,10 @@ mod tests {
         // Next 4 words: IV[0..4]
         v[8..12].copy_from_slice(&IV[0..4]);
         // Last 4 words: counter_low, counter_high, block_len, flags
-        v[12] = 0;  // counter_low
-        v[13] = 0;  // counter_high
-        v[14] = 3;  // block_len in bytes (we have 3 bytes input)
-        v[15] = 0b1011;  // flags: CHUNK_START | CHUNK_END | ROOT
+        v[12] = 0; // counter_low
+        v[13] = 0; // counter_high
+        v[14] = 3; // block_len in bytes (we have 3 bytes input)
+        v[15] = 0b1011; // flags: CHUNK_START | CHUNK_END | ROOT
 
         // Convert to SIMD
         let mut v_simd: [u32x16; 16] = v.map(u32x16::splat);

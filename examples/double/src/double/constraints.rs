@@ -1,5 +1,8 @@
-use stwo::core::{fields::m31::BaseField};
-use stwo_constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval, RelationEntry, preprocessed_columns::PreProcessedColumnId};
+use stwo::core::fields::m31::BaseField;
+use stwo_constraint_framework::{
+    EvalAtRow, FrameworkComponent, FrameworkEval, RelationEntry,
+    preprocessed_columns::PreProcessedColumnId,
+};
 
 use crate::bridge::InputRelation;
 
@@ -10,7 +13,7 @@ pub struct DoubleEval {
     pub log_n_rows: u32,
     pub output: u32,
     pub is_first_id: PreProcessedColumnId,
-    pub input_relation: InputRelation
+    pub input_relation: InputRelation,
 }
 
 impl FrameworkEval for DoubleEval {
@@ -36,8 +39,8 @@ impl FrameworkEval for DoubleEval {
 
         eval.add_to_relation(RelationEntry::new(
             &self.input_relation,
-            E::EF::from(multiplicity), 
-            &[input]
+            E::EF::from(multiplicity),
+            &[input],
         ));
 
         eval.finalize_logup_in_pairs();

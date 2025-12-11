@@ -1,25 +1,25 @@
 use std::simd::u32x16;
 
-use itertools::{chain, Itertools};
+use itertools::{Itertools, chain};
 use num_traits::Zero;
+use stwo::core::ColumnVec;
 use stwo::core::fields::m31::BaseField;
 use stwo::core::fields::qm31::SecureField;
 use stwo::core::poly::circle::CanonicCoset;
-use stwo::core::ColumnVec;
-use stwo::prover::backend::simd::column::BaseColumn;
-use stwo::prover::backend::simd::m31::{PackedBaseField, LOG_N_LANES};
-use stwo::prover::backend::simd::qm31::PackedSecureField;
-use stwo::prover::backend::simd::SimdBackend;
 use stwo::prover::backend::Column;
-use stwo::prover::poly::circle::CircleEvaluation;
+use stwo::prover::backend::simd::SimdBackend;
+use stwo::prover::backend::simd::column::BaseColumn;
+use stwo::prover::backend::simd::m31::{LOG_N_LANES, PackedBaseField};
+use stwo::prover::backend::simd::qm31::PackedSecureField;
 use stwo::prover::poly::BitReversedOrder;
+use stwo::prover::poly::circle::CircleEvaluation;
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
-use tracing::{span, Level};
+use tracing::{Level, span};
 
 use super::BlakeElements;
 use crate::blake3::blake3;
 use crate::blake3::round::{BlakeRoundInput, RoundElements};
-use crate::blake3::{to_felts, N_ROUNDS, N_ROUND_INPUT_FELTS, STATE_SIZE};
+use crate::blake3::{N_ROUND_INPUT_FELTS, N_ROUNDS, STATE_SIZE, to_felts};
 
 #[derive(Copy, Clone, Default)]
 pub struct BlakeInput {
@@ -68,7 +68,7 @@ pub fn gen_trace(
         .collect_vec();
 
     for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {
-        let mut col_index = 0;  // Start from column 0
+        let mut col_index = 0; // Start from column 0
 
         let mut write_u32_array = |x: [u32x16; STATE_SIZE], col_index: &mut usize| {
             x.iter().for_each(|x| {
@@ -122,12 +122,13 @@ pub fn gen_trace(
         // Index columns: set only in first row (vec_row == 0)
         let index_col_start = n_cols - 2;
         if vec_row == 0 {
-            trace[index_col_start].data[vec_row] = unsafe { PackedBaseField::from_simd_unchecked(
-                u32x16::splat(fibonacci_index)
-            ) };
-            trace[index_col_start + 1].data[vec_row] = unsafe { PackedBaseField::from_simd_unchecked(
-                u32x16::splat(1)  // multiplicity = 1
-            ) };
+            trace[index_col_start].data[vec_row] =
+                unsafe { PackedBaseField::from_simd_unchecked(u32x16::splat(fibonacci_index)) };
+            trace[index_col_start + 1].data[vec_row] = unsafe {
+                PackedBaseField::from_simd_unchecked(
+                    u32x16::splat(1), // multiplicity = 1
+                )
+            };
         } else {
             trace[index_col_start].data[vec_row] = PackedBaseField::zero();
             trace[index_col_start + 1].data[vec_row] = PackedBaseField::zero();
@@ -142,16 +143,23 @@ pub fn gen_trace(
         let mut col_index_check = 0usize;
         // message array -> m (STATE_SIZE u32x16) -> each expands to to_felts() length
         // compute felts per u32x16 using to_felts on a dummy value:
-        let sample_u = inputs.get(0).map(|bi| bi.m).unwrap_or([u32x16::splat(0); STATE_SIZE]);
+        let sample_u = inputs
+            .get(0)
+            .map(|bi| bi.m)
+            .unwrap_or([u32x16::splat(0); STATE_SIZE]);
         // take first element and measure len
         let felts_per_lane = to_felts(&sample_u[0]).len();
         // felts written by write_u32_array for one array of STATE_SIZE:
         let felts_per_array = STATE_SIZE * felts_per_lane;
 
         // columns layout in row: m (felts_per_array) + v (felts_per_array) + N_ROUNDS * (v_after_round (felts_per_array))
-        let computed_n_cols = felts_per_array + felts_per_array + (N_ROUNDS as usize) * felts_per_array;
+        let computed_n_cols =
+            felts_per_array + felts_per_array + (N_ROUNDS as usize) * felts_per_array;
         if computed_n_cols != n_cols as usize {
-            eprintln!("GEN_TRACE SANITY: computed_n_cols={} but n_cols={} -- MISMATCH!", computed_n_cols, n_cols);
+            eprintln!(
+                "GEN_TRACE SANITY: computed_n_cols={} but n_cols={} -- MISMATCH!",
+                computed_n_cols, n_cols
+            );
         } else {
             eprintln!("GEN_TRACE SANITY: computed_n_cols == n_cols == {}", n_cols);
         }
@@ -159,19 +167,31 @@ pub fn gen_trace(
         // 2) sprawdź, czy dla każdego round r, liczba wartości zapisywanych do lookup_data.round_lookups[r] odpowiada N_ROUND_INPUT_FELTS
         // policz liczbę felts generowanych przez chain![prev_v, v, m_current]
         let felts_per_round_triplet = (STATE_SIZE * felts_per_lane) * 3; // prev_v + v + m_current
-        eprintln!("GEN_TRACE SANITY: felts_per_lane = {}, felts_per_round_triplet = {}", felts_per_lane, felts_per_round_triplet);
-        eprintln!("GEN_TRACE SANITY: N_ROUND_INPUT_FELTS = {}", N_ROUND_INPUT_FELTS);
+        eprintln!(
+            "GEN_TRACE SANITY: felts_per_lane = {}, felts_per_round_triplet = {}",
+            felts_per_lane, felts_per_round_triplet
+        );
+        eprintln!(
+            "GEN_TRACE SANITY: N_ROUND_INPUT_FELTS = {}",
+            N_ROUND_INPUT_FELTS
+        );
 
         if felts_per_round_triplet != N_ROUND_INPUT_FELTS as usize {
-            eprintln!("GEN_TRACE SANITY: WARNING: felts_per_round_triplet ({}) != N_ROUND_INPUT_FELTS ({})",
-                      felts_per_round_triplet, N_ROUND_INPUT_FELTS);
+            eprintln!(
+                "GEN_TRACE SANITY: WARNING: felts_per_round_triplet ({}) != N_ROUND_INPUT_FELTS ({})",
+                felts_per_round_triplet, N_ROUND_INPUT_FELTS
+            );
         } else {
             eprintln!("GEN_TRACE SANITY: round triplet size matches N_ROUND_INPUT_FELTS");
         }
 
         // 3) check round_inputs length
         let expected_round_inputs = inputs.len() * (N_ROUNDS as usize);
-        eprintln!("GEN_TRACE SANITY: round_inputs.len() = {}, expected = {}", round_inputs.len(), expected_round_inputs);
+        eprintln!(
+            "GEN_TRACE SANITY: round_inputs.len() = {}, expected = {}",
+            round_inputs.len(),
+            expected_round_inputs
+        );
         if round_inputs.len() != expected_round_inputs {
             eprintln!("GEN_TRACE SANITY: round_inputs length mismatch!");
         }

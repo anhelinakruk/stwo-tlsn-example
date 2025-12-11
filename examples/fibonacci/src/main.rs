@@ -2,8 +2,8 @@
 #![feature(array_chunks)]
 #![feature(iter_array_chunks)]
 
-pub mod fibonacci;
 pub mod blake3;
+pub mod fibonacci;
 
 fn main() {
     println!("Hello, world!");
@@ -11,9 +11,12 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use stwo::core::{poly::circle::CanonicCoset};
+    use stwo::core::poly::circle::CanonicCoset;
 
-    use crate::fibonacci::{FibComponent, FibEval, gen_fib_trace, gen_fib_interaction_trace, gen_is_first_column, gen_is_target_column, is_first_column_id, is_target_column_id, ValueRelation};
+    use crate::fibonacci::{
+        FibComponent, FibEval, ValueRelation, gen_fib_interaction_trace, gen_fib_trace,
+        gen_is_first_column, gen_is_target_column, is_first_column_id, is_target_column_id,
+    };
 
     #[test]
     fn test_bridge_only_prove_verify() {
@@ -24,13 +27,13 @@ mod tests {
         use stwo::core::verifier::verify;
         use stwo::prover::backend::simd::SimdBackend;
         use stwo::prover::poly::circle::PolyOps;
-        use stwo::prover::{prove, CommitmentSchemeProver};
+        use stwo::prover::{CommitmentSchemeProver, prove};
         use stwo_constraint_framework::TraceLocationAllocator;
 
         let log_size = 4;
         let fibonacci_index = 8;
 
-         let (fib_trace, fibonacci_value) = gen_fib_trace(log_size, fibonacci_index);
+        let (fib_trace, fibonacci_value) = gen_fib_trace(log_size, fibonacci_index);
         println!("Trace generated: {} columns", fib_trace.len());
         println!("Value: {}", fibonacci_value);
         let is_first_col = gen_is_first_column(log_size);
@@ -113,7 +116,7 @@ mod tests {
 
     #[test]
     fn test_fibonacci_blake_prove_verify() {
-        use itertools::{chain, Itertools, multiunzip};
+        use itertools::{Itertools, chain, multiunzip};
         use num_traits::Zero;
         use stwo::core::air::Component;
         use stwo::core::channel::Blake2sChannel;
@@ -121,22 +124,25 @@ mod tests {
         use stwo::core::pcs::{CommitmentSchemeVerifier, PcsConfig};
         use stwo::core::vcs::blake2_merkle::Blake2sMerkleChannel;
         use stwo::core::verifier::verify;
-        use stwo::prover::backend::simd::m31::LOG_N_LANES;
         use stwo::prover::backend::simd::SimdBackend;
+        use stwo::prover::backend::simd::m31::LOG_N_LANES;
         use stwo::prover::poly::circle::PolyOps;
-        use stwo::prover::{prove, CommitmentSchemeProver};
+        use stwo::prover::{CommitmentSchemeProver, prove};
         use stwo_constraint_framework::TraceLocationAllocator;
 
-        use crate::blake3::{scheduler, round, xor_table, XorAccums, ROUND_LOG_SPLIT};
-        use crate::blake3::preprocessed_columns::XorTable;
         use crate::blake3::air::{AllElements, BlakeStatement0};
+        use crate::blake3::preprocessed_columns::XorTable;
+        use crate::blake3::{ROUND_LOG_SPLIT, XorAccums, round, scheduler, xor_table};
 
         let log_size = 4;
         let fibonacci_index = 8;
 
         let (fib_trace, fibonacci_value) = gen_fib_trace(log_size, fibonacci_index);
         println!("Fibonacci trace generated: {} columns", fib_trace.len());
-        println!("Fibonacci value at index {}: {}", fibonacci_index, fibonacci_value);
+        println!(
+            "Fibonacci value at index {}: {}",
+            fibonacci_index, fibonacci_value
+        );
 
         let fib_is_first_col = gen_is_first_column(log_size);
         let fib_is_target_col = gen_is_target_column(log_size, fibonacci_index);
@@ -145,7 +151,10 @@ mod tests {
 
         let (blake_scheduler_trace, blake_scheduler_lookup_data, blake_round_inputs) =
             scheduler::gen_trace(log_size, fibonacci_value);
-        println!("Blake scheduler trace generated: {} columns", blake_scheduler_trace.len());
+        println!(
+            "Blake scheduler trace generated: {} columns",
+            blake_scheduler_trace.len()
+        );
 
         let mut xor_accums = XorAccums::default();
         let mut rest = &blake_round_inputs[..];
@@ -156,11 +165,16 @@ mod tests {
                 round::generate_trace(log_size + l, cur_inputs, &mut xor_accums)
             }));
 
-        let (blake_xor_trace12, blake_xor_lookup_data12) = xor_table::xor12::generate_trace(xor_accums.xor12);
-        let (blake_xor_trace9, blake_xor_lookup_data9) = xor_table::xor9::generate_trace(xor_accums.xor9);
-        let (blake_xor_trace8, blake_xor_lookup_data8) = xor_table::xor8::generate_trace(xor_accums.xor8);
-        let (blake_xor_trace7, blake_xor_lookup_data7) = xor_table::xor7::generate_trace(xor_accums.xor7);
-        let (blake_xor_trace4, blake_xor_lookup_data4) = xor_table::xor4::generate_trace(xor_accums.xor4);
+        let (blake_xor_trace12, blake_xor_lookup_data12) =
+            xor_table::xor12::generate_trace(xor_accums.xor12);
+        let (blake_xor_trace9, blake_xor_lookup_data9) =
+            xor_table::xor9::generate_trace(xor_accums.xor9);
+        let (blake_xor_trace8, blake_xor_lookup_data8) =
+            xor_table::xor8::generate_trace(xor_accums.xor8);
+        let (blake_xor_trace7, blake_xor_lookup_data7) =
+            xor_table::xor7::generate_trace(xor_accums.xor7);
+        let (blake_xor_trace4, blake_xor_lookup_data4) =
+            xor_table::xor4::generate_trace(xor_accums.xor4);
 
         let config = PcsConfig::default();
         const XOR_TABLE_MAX_LOG_SIZE: u32 = 16;
@@ -226,22 +240,22 @@ mod tests {
                 &blake_preprocessed,
                 &value_relation,
             );
-        println!("Blake scheduler claimed sum: {:?}", blake_scheduler_claimed_sum);
+        println!(
+            "Blake scheduler claimed sum: {:?}",
+            blake_scheduler_claimed_sum
+        );
 
         let (blake_round_interaction_traces, blake_round_claimed_sums): (Vec<_>, Vec<_>) =
-            multiunzip(
-                ROUND_LOG_SPLIT
-                    .iter()
-                    .zip(blake_round_lookup_data)
-                    .map(|(l, lookup_data)| {
-                        round::generate_interaction_trace(
-                            log_size + l,
-                            lookup_data,
-                            &all_elements.xor_elements,
-                            &all_elements.round_elements,
-                        )
-                    }),
-            );
+            multiunzip(ROUND_LOG_SPLIT.iter().zip(blake_round_lookup_data).map(
+                |(l, lookup_data)| {
+                    round::generate_interaction_trace(
+                        log_size + l,
+                        lookup_data,
+                        &all_elements.xor_elements,
+                        &all_elements.round_elements,
+                    )
+                },
+            ));
 
         let (blake_xor_interaction_trace12, blake_xor_claimed_sum12) =
             xor_table::xor12::generate_interaction_trace(
@@ -270,12 +284,18 @@ mod tests {
             );
 
         println!("Fibonacci claimed sum:        {:?}", fib_claimed_sum);
-        println!("Blake scheduler claimed sum:  {:?}", blake_scheduler_claimed_sum);
+        println!(
+            "Blake scheduler claimed sum:  {:?}",
+            blake_scheduler_claimed_sum
+        );
 
         let rounds_sum = blake_round_claimed_sums.iter().sum::<SecureField>();
         println!("Blake rounds total:           {:?}", rounds_sum);
 
-        println!("Blake XOR12 claimed:          {:?}", blake_xor_claimed_sum12);
+        println!(
+            "Blake XOR12 claimed:          {:?}",
+            blake_xor_claimed_sum12
+        );
         println!("Blake XOR9 claimed:           {:?}", blake_xor_claimed_sum9);
         println!("Blake XOR8 claimed:           {:?}", blake_xor_claimed_sum8);
         println!("Blake XOR7 claimed:           {:?}", blake_xor_claimed_sum7);
@@ -291,7 +311,12 @@ mod tests {
             + blake_xor_claimed_sum4;
         println!("\nTOTAL LogUp sum: {:?}", total_sum);
 
-        assert_eq!(total_sum, SecureField::zero(), "LogUp sum must be zero! Got: {:?}", total_sum);
+        assert_eq!(
+            total_sum,
+            SecureField::zero(),
+            "LogUp sum must be zero! Got: {:?}",
+            total_sum
+        );
         println!("LogUp sum verified to be zero\n");
 
         let mut tree_builder = commitment_scheme.tree_builder();
@@ -342,14 +367,19 @@ mod tests {
         // Prove
         let all_component_provers = chain![
             [&fib_component as &dyn stwo::prover::ComponentProver<SimdBackend>],
-            [&blake_components.scheduler_component as &dyn stwo::prover::ComponentProver<SimdBackend>],
-            blake_components.round_components.iter().map(|c| c as &dyn stwo::prover::ComponentProver<SimdBackend>),
+            [&blake_components.scheduler_component
+                as &dyn stwo::prover::ComponentProver<SimdBackend>],
+            blake_components
+                .round_components
+                .iter()
+                .map(|c| c as &dyn stwo::prover::ComponentProver<SimdBackend>),
             [&blake_components.xor12 as &dyn stwo::prover::ComponentProver<SimdBackend>],
             [&blake_components.xor9 as &dyn stwo::prover::ComponentProver<SimdBackend>],
             [&blake_components.xor8 as &dyn stwo::prover::ComponentProver<SimdBackend>],
             [&blake_components.xor7 as &dyn stwo::prover::ComponentProver<SimdBackend>],
             [&blake_components.xor4 as &dyn stwo::prover::ComponentProver<SimdBackend>],
-        ].collect_vec();
+        ]
+        .collect_vec();
 
         let proof = prove::<SimdBackend, Blake2sMerkleChannel>(
             &all_component_provers,
@@ -385,14 +415,27 @@ mod tests {
             .copied()
             .collect();
 
-        commitment_scheme_verifier.commit(proof.commitments[0], &combined_preprocessed_sizes, verifier_channel);
-        commitment_scheme_verifier.commit(proof.commitments[1], &combined_base_sizes, verifier_channel);
-        commitment_scheme_verifier.commit(proof.commitments[2], &combined_interaction_sizes, verifier_channel);
+        commitment_scheme_verifier.commit(
+            proof.commitments[0],
+            &combined_preprocessed_sizes,
+            verifier_channel,
+        );
+        commitment_scheme_verifier.commit(
+            proof.commitments[1],
+            &combined_base_sizes,
+            verifier_channel,
+        );
+        commitment_scheme_verifier.commit(
+            proof.commitments[2],
+            &combined_interaction_sizes,
+            verifier_channel,
+        );
 
         let all_components_for_verify = chain![
             [&fib_component as &dyn Component],
             blake_components.as_components_vec()
-        ].collect_vec();
+        ]
+        .collect_vec();
 
         verify(
             &all_components_for_verify,

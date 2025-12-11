@@ -1,19 +1,37 @@
-use std::simd::u32x16;
 use crate::blake3::scheduler::BlakeInput;
+use std::simd::u32x16;
 
 #[cfg(test)]
 mod tests {
-    use stwo::{core::{channel::Blake2sChannel, pcs::{ PcsConfig}, poly::circle::CanonicCoset, vcs::blake2_merkle::Blake2sMerkleChannel, verifier::verify}, prover::{CommitmentSchemeProver, ComponentProver, backend::simd::SimdBackend, poly::circle::PolyOps, prove}};
+    use itertools::{Itertools, multiunzip};
+    use stwo::{
+        core::{
+            channel::Blake2sChannel, pcs::PcsConfig, poly::circle::CanonicCoset,
+            vcs::blake2_merkle::Blake2sMerkleChannel, verifier::verify,
+        },
+        prover::{
+            CommitmentSchemeProver, ComponentProver, backend::simd::SimdBackend,
+            poly::circle::PolyOps, prove,
+        },
+    };
     use stwo_constraint_framework::TraceLocationAllocator;
-    use itertools::{multiunzip, Itertools};
 
     use crate::{
         blake3::{
-            BlakeComponentsForIntegration, BlakeXorElements, ROUND_LOG_SPLIT, XorAccums, round::{self, RoundElements}, scheduler::{self, BlakeElements}, xor_table
+            BlakeComponentsForIntegration, BlakeXorElements, ROUND_LOG_SPLIT, XorAccums,
+            round::{self, RoundElements},
+            scheduler::{self, BlakeElements},
+            xor_table,
         },
-        bridge::{IndexBridgeComponent, IndexBridgeEval, IndexRelation, gen_bridge_interaction_trace, gen_bridge_trace},
-        fibonacci::{FibEval, gen_fib_interaction_trace, gen_fib_trace, gen_is_first_column, is_first_column_id},
-        full_test::prepare_blake_inputs
+        bridge::{
+            IndexBridgeComponent, IndexBridgeEval, IndexRelation, gen_bridge_interaction_trace,
+            gen_bridge_trace,
+        },
+        fibonacci::{
+            FibEval, gen_fib_interaction_trace, gen_fib_trace, gen_is_first_column,
+            is_first_column_id,
+        },
+        full_test::prepare_blake_inputs,
     };
 
     #[test]
@@ -59,19 +77,21 @@ mod tests {
         let config = PcsConfig::default();
 
         const XOR_TABLE_MAX_LOG_SIZE: u32 = 16;
-        let log_max_rows = (log_size + *ROUND_LOG_SPLIT.iter().max().unwrap()).max(XOR_TABLE_MAX_LOG_SIZE);
+        let log_max_rows =
+            (log_size + *ROUND_LOG_SPLIT.iter().max().unwrap()).max(XOR_TABLE_MAX_LOG_SIZE);
         let twiddles = SimdBackend::precompute_twiddles(
             CanonicCoset::new(log_max_rows + 1 + config.fri_config.log_blowup_factor)
                 .circle_domain()
-                .half_coset
+                .half_coset,
         );
 
         let prover_channel = &mut Blake2sChannel::default();
-        let mut commitment_scheme = CommitmentSchemeProver::<SimdBackend, Blake2sMerkleChannel>::new(config, &twiddles);
-  
+        let mut commitment_scheme =
+            CommitmentSchemeProver::<SimdBackend, Blake2sMerkleChannel>::new(config, &twiddles);
+
         let mut tree_builder = commitment_scheme.tree_builder();
-        tree_builder.extend_evals([]); 
-        tree_builder.extend_evals(vec![is_first_col_fib.clone()]);  
+        tree_builder.extend_evals([]);
+        tree_builder.extend_evals(vec![is_first_col_fib.clone()]);
         tree_builder.extend_evals(
             vec![
                 XorTable::new(12, 4, 0).generate_constant_trace(),
@@ -89,7 +109,10 @@ mod tests {
                 XorTable::new(4, 0, 0).generate_constant_trace(),
                 XorTable::new(4, 0, 1).generate_constant_trace(),
                 XorTable::new(4, 0, 2).generate_constant_trace(),
-            ].into_iter().flatten().collect_vec()
+            ]
+            .into_iter()
+            .flatten()
+            .collect_vec(),
         );
         tree_builder.commit(prover_channel);
         println!("✓ Preprocessed traces committed");
@@ -98,8 +121,8 @@ mod tests {
 
         let scheduler_trace_for_interaction = scheduler_trace.clone();
 
-        tree_builder.extend_evals(bridge_trace.clone()); 
-        tree_builder.extend_evals(fib_trace.clone()); 
+        tree_builder.extend_evals(bridge_trace.clone());
+        tree_builder.extend_evals(fib_trace.clone());
         tree_builder.extend_evals(
             vec![scheduler_trace]
                 .into_iter()
@@ -112,7 +135,7 @@ mod tests {
                     xor_trace4.clone(),
                 ])
                 .flatten()
-                .collect_vec()
+                .collect_vec(),
         );
 
         tree_builder.commit(prover_channel);
@@ -126,10 +149,18 @@ mod tests {
 
         let (bridge_interaction_trace, bridge_claimed_sum) =
             gen_bridge_interaction_trace(&bridge_trace, &index_elements);
-        println!("Bridge: {} columns, sum = {:?}", bridge_interaction_trace.len(), bridge_claimed_sum);
+        println!(
+            "Bridge: {} columns, sum = {:?}",
+            bridge_interaction_trace.len(),
+            bridge_claimed_sum
+        );
         let (fib_interaction_trace, fib_claimed_sum) =
             gen_fib_interaction_trace(&fib_trace, &index_elements);
-        println!("Fibonacci: {} columns, sum = {:?}", fib_interaction_trace.len(), fib_claimed_sum);
+        println!(
+            "Fibonacci: {} columns, sum = {:?}",
+            fib_interaction_trace.len(),
+            fib_claimed_sum
+        );
         let (scheduler_interaction_trace, scheduler_claimed_sum) = scheduler::gen_interaction_trace(
             log_size,
             scheduler_lookup_data,
@@ -138,7 +169,11 @@ mod tests {
             &scheduler_trace_for_interaction,
             &index_elements,
         );
-        println!("Blake scheduler: {} columns, sum = {:?}", scheduler_interaction_trace.len(), scheduler_claimed_sum);
+        println!(
+            "Blake scheduler: {} columns, sum = {:?}",
+            scheduler_interaction_trace.len(),
+            scheduler_claimed_sum
+        );
 
         let (round_interaction_traces, round_claimed_sums): (Vec<_>, Vec<_>) = multiunzip(
             ROUND_LOG_SPLIT
@@ -153,28 +188,21 @@ mod tests {
                     )
                 }),
         );
-        println!("Blake rounds: {} components", round_interaction_traces.len());
+        println!(
+            "Blake rounds: {} components",
+            round_interaction_traces.len()
+        );
 
-        let (xor_interaction12, xor12_claimed_sum) = xor_table::xor12::generate_interaction_trace(
-            xor_lookup_data12,
-            &xor_elements.xor12,
-        );
-        let (xor_interaction9, xor9_claimed_sum) = xor_table::xor9::generate_interaction_trace(
-            xor_lookup_data9,
-            &xor_elements.xor9,
-        );
-        let (xor_interaction8, xor8_claimed_sum) = xor_table::xor8::generate_interaction_trace(
-            xor_lookup_data8,
-            &xor_elements.xor8,
-        );
-        let (xor_interaction7, xor7_claimed_sum) = xor_table::xor7::generate_interaction_trace(
-            xor_lookup_data7,
-            &xor_elements.xor7,
-        );
-        let (xor_interaction4, xor4_claimed_sum) = xor_table::xor4::generate_interaction_trace(
-            xor_lookup_data4,
-            &xor_elements.xor4,
-        );
+        let (xor_interaction12, xor12_claimed_sum) =
+            xor_table::xor12::generate_interaction_trace(xor_lookup_data12, &xor_elements.xor12);
+        let (xor_interaction9, xor9_claimed_sum) =
+            xor_table::xor9::generate_interaction_trace(xor_lookup_data9, &xor_elements.xor9);
+        let (xor_interaction8, xor8_claimed_sum) =
+            xor_table::xor8::generate_interaction_trace(xor_lookup_data8, &xor_elements.xor8);
+        let (xor_interaction7, xor7_claimed_sum) =
+            xor_table::xor7::generate_interaction_trace(xor_lookup_data7, &xor_elements.xor7);
+        let (xor_interaction4, xor4_claimed_sum) =
+            xor_table::xor4::generate_interaction_trace(xor_lookup_data4, &xor_elements.xor4);
         println!("Blake XOR tables: 5 interaction traces");
 
         println!("\n=== CLAIMED SUM BREAKDOWN ===");
@@ -182,7 +210,9 @@ mod tests {
         for (i, sum) in round_claimed_sums.iter().enumerate() {
             println!("Round {}:        {:?}", i, sum);
         }
-        let rounds_total = round_claimed_sums.iter().sum::<stwo::core::fields::qm31::SecureField>();
+        let rounds_total = round_claimed_sums
+            .iter()
+            .sum::<stwo::core::fields::qm31::SecureField>();
         println!("Rounds total:  {:?}", rounds_total);
         println!("XOR12:         {:?}", xor12_claimed_sum);
         println!("XOR9:          {:?}", xor9_claimed_sum);
@@ -211,8 +241,8 @@ mod tests {
         println!("Step 8: Commit interaction traces");
         let mut tree_builder = commitment_scheme.tree_builder();
 
-        tree_builder.extend_evals(bridge_interaction_trace); 
-        tree_builder.extend_evals(fib_interaction_trace); 
+        tree_builder.extend_evals(bridge_interaction_trace);
+        tree_builder.extend_evals(fib_interaction_trace);
         tree_builder.extend_evals(
             vec![scheduler_interaction_trace]
                 .into_iter()
@@ -225,7 +255,7 @@ mod tests {
                     xor_interaction4,
                 ])
                 .flatten()
-                .collect_vec()
+                .collect_vec(),
         );
 
         tree_builder.commit(prover_channel);
@@ -254,7 +284,8 @@ mod tests {
         all_preprocessed_ids.push(XorTable::new(4, 0, 1).id());
         all_preprocessed_ids.push(XorTable::new(4, 0, 2).id());
 
-        let mut tree_span_provider = TraceLocationAllocator::new_with_preprocessed_columns(&all_preprocessed_ids);
+        let mut tree_span_provider =
+            TraceLocationAllocator::new_with_preprocessed_columns(&all_preprocessed_ids);
 
         let bridge_component = IndexBridgeComponent::new(
             &mut tree_span_provider,
@@ -286,7 +317,7 @@ mod tests {
             &xor_elements,
             &index_elements,
             fibonacci_index as u32,
-            is_first_column_id(log_size),  
+            is_first_column_id(log_size),
             scheduler_claimed_sum,
             &round_claimed_sums,
             xor12_claimed_sum,
@@ -295,10 +326,14 @@ mod tests {
             xor7_claimed_sum,
             xor4_claimed_sum,
         );
-        println!("Blake3 components (scheduler + {} rounds + 5 XOR tables)", ROUND_LOG_SPLIT.len());
+        println!(
+            "Blake3 components (scheduler + {} rounds + 5 XOR tables)",
+            ROUND_LOG_SPLIT.len()
+        );
 
         println!("Step 10: Generate proof");
-        let mut all_components: Vec<&dyn ComponentProver<SimdBackend>> = vec![&bridge_component, &fib_component];
+        let mut all_components: Vec<&dyn ComponentProver<SimdBackend>> =
+            vec![&bridge_component, &fib_component];
         all_components.push(&blake_components.scheduler_component);
         for comp in &blake_components.round_components {
             all_components.push(comp);
@@ -323,7 +358,6 @@ mod tests {
 
         println!("Proof generation passed");
     }
-    
 }
 
 pub fn prepare_blake_inputs(log_size: u32, index: usize) -> Vec<BlakeInput> {
@@ -335,8 +369,8 @@ pub fn prepare_blake_inputs(log_size: u32, index: usize) -> Vec<BlakeInput> {
 
     // Blake3 Initial Vector (IV) - standard 8 values
     const BLAKE3_IV: [u32; 8] = [
-        0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A,
-        0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
+        0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB,
+        0x5BE0CD19,
     ];
 
     // Build initial state for Blake3 compression:
@@ -349,10 +383,10 @@ pub fn prepare_blake_inputs(log_size: u32, index: usize) -> Vec<BlakeInput> {
     let mut initial_state = [0u32; STATE_SIZE];
     initial_state[0..8].copy_from_slice(&BLAKE3_IV);
     initial_state[8..12].copy_from_slice(&BLAKE3_IV[0..4]);
-    initial_state[12] = 0;  // counter_low
-    initial_state[13] = 0;  // counter_high
-    initial_state[14] = 4;  // block_len (4 bytes for u32)
-    initial_state[15] = 0b1011;  // flags: CHUNK_START | CHUNK_END | ROOT
+    initial_state[12] = 0; // counter_low
+    initial_state[13] = 0; // counter_high
+    initial_state[14] = 4; // block_len (4 bytes for u32)
+    initial_state[15] = 0b1011; // flags: CHUNK_START | CHUNK_END | ROOT
 
     // Message to hash: put index in first word, rest zeros (padding)
     let mut message = [0u32; STATE_SIZE];

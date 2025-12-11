@@ -1,16 +1,16 @@
+use stwo::core::ColumnVec;
 use stwo::core::fields::m31::BaseField;
 use stwo::core::fields::qm31::SecureField;
 use stwo::core::poly::circle::CanonicCoset;
 use stwo::core::utils::bit_reverse_coset_to_circle_domain_order;
-use stwo::core::ColumnVec;
-use stwo::prover::backend::simd::qm31::PackedSecureField;
-use stwo_constraint_framework::Relation;
-use stwo::prover::backend::simd::m31::LOG_N_LANES;
 use stwo::prover::backend::simd::SimdBackend;
+use stwo::prover::backend::simd::m31::LOG_N_LANES;
+use stwo::prover::backend::simd::qm31::PackedSecureField;
 use stwo::prover::backend::{Col, Column};
-use stwo::prover::poly::circle::CircleEvaluation;
 use stwo::prover::poly::BitReversedOrder;
+use stwo::prover::poly::circle::CircleEvaluation;
 use stwo_constraint_framework::LogupTraceGenerator;
+use stwo_constraint_framework::Relation;
 
 use crate::bridge::IndexRelation;
 
@@ -28,7 +28,7 @@ pub fn gen_bridge_trace(
     bit_reverse_coset_to_circle_domain_order(col_index.as_mut_slice());
 
     let mut col_multiplicity = Col::<SimdBackend, BaseField>::zeros(n_rows);
-    col_multiplicity.set(0, multiplicity_value);  
+    col_multiplicity.set(0, multiplicity_value);
     bit_reverse_coset_to_circle_domain_order(col_multiplicity.as_mut_slice());
 
     let domain = CanonicCoset::new(log_size).circle_domain();

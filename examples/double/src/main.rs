@@ -2,9 +2,9 @@
 #![feature(array_chunks)]
 #![feature(iter_array_chunks)]
 
-pub mod double;
-pub mod bridge;
 pub mod blake3;
+pub mod bridge;
+pub mod double;
 
 fn main() {
     println!("Hello, world!");
@@ -15,12 +15,29 @@ mod tests {
     use num_traits::Zero;
     use stwo::core::{fields::qm31::SecureField, poly::circle::CanonicCoset};
 
-    use crate::{bridge::{InputRelation, constraints::{InputBridgeComponent, InputBridgeEval}, trace_gen::{gen_bridge_interaction_trace, gen_bridge_trace}}, double::{constraints::{DoubleComponent, DoubleEval}, trace_gen::{gen_double_interaction_trace, gen_double_trace, gen_is_first_column, is_first_column_id}}};
+    use crate::{
+        bridge::{
+            InputRelation,
+            constraints::{InputBridgeComponent, InputBridgeEval},
+            trace_gen::{gen_bridge_interaction_trace, gen_bridge_trace},
+        },
+        double::{
+            constraints::{DoubleComponent, DoubleEval},
+            trace_gen::{
+                gen_double_interaction_trace, gen_double_trace, gen_is_first_column,
+                is_first_column_id,
+            },
+        },
+    };
 
     #[test]
     fn test_blake_double_bridge_prove_verify() {
+        use crate::blake3::air::{AllElements, BlakeStatement0};
+        use crate::blake3::preprocessed_columns::XorTable;
+        use crate::blake3::scheduler::BlakeInput;
+        use crate::blake3::{ROUND_LOG_SPLIT, XorAccums, round, scheduler, xor_table};
+        use itertools::{Itertools, chain, multiunzip};
         use std::simd::u32x16;
-        use itertools::{chain, Itertools, multiunzip};
         use stwo::core::air::Component;
         use stwo::core::channel::Blake2sChannel;
         use stwo::core::pcs::{CommitmentSchemeVerifier, PcsConfig};
@@ -29,12 +46,8 @@ mod tests {
         use stwo::prover::backend::simd::SimdBackend;
         use stwo::prover::backend::simd::m31::LOG_N_LANES;
         use stwo::prover::poly::circle::PolyOps;
-        use stwo::prover::{prove, CommitmentSchemeProver};
+        use stwo::prover::{CommitmentSchemeProver, prove};
         use stwo_constraint_framework::TraceLocationAllocator;
-        use crate::blake3::{scheduler, round, xor_table, XorAccums, ROUND_LOG_SPLIT};
-        use crate::blake3::scheduler::BlakeInput;
-        use crate::blake3::preprocessed_columns::XorTable;
-        use crate::blake3::air::{AllElements, BlakeStatement0, };
 
         let log_size = 4;
         let input = 5 as u32;
@@ -65,14 +78,19 @@ mod tests {
                 round::generate_trace(log_size + l, cur_inputs, &mut xor_accums)
             }));
 
-        let (blake_xor_trace12, blake_xor_lookup_data12) = xor_table::xor12::generate_trace(xor_accums.xor12);
-        let (blake_xor_trace9, blake_xor_lookup_data9) = xor_table::xor9::generate_trace(xor_accums.xor9);
-        let (blake_xor_trace8, blake_xor_lookup_data8) = xor_table::xor8::generate_trace(xor_accums.xor8);
-        let (blake_xor_trace7, blake_xor_lookup_data7) = xor_table::xor7::generate_trace(xor_accums.xor7);
-        let (blake_xor_trace4, blake_xor_lookup_data4) = xor_table::xor4::generate_trace(xor_accums.xor4);
+        let (blake_xor_trace12, blake_xor_lookup_data12) =
+            xor_table::xor12::generate_trace(xor_accums.xor12);
+        let (blake_xor_trace9, blake_xor_lookup_data9) =
+            xor_table::xor9::generate_trace(xor_accums.xor9);
+        let (blake_xor_trace8, blake_xor_lookup_data8) =
+            xor_table::xor8::generate_trace(xor_accums.xor8);
+        let (blake_xor_trace7, blake_xor_lookup_data7) =
+            xor_table::xor7::generate_trace(xor_accums.xor7);
+        let (blake_xor_trace4, blake_xor_lookup_data4) =
+            xor_table::xor4::generate_trace(xor_accums.xor4);
 
         let config = PcsConfig::default();
-         const XOR_TABLE_MAX_LOG_SIZE: u32 = 16;
+        const XOR_TABLE_MAX_LOG_SIZE: u32 = 16;
         let log_max_rows =
             (log_size + *ROUND_LOG_SPLIT.iter().max().unwrap()).max(XOR_TABLE_MAX_LOG_SIZE);
         let twiddles = SimdBackend::precompute_twiddles(
@@ -86,9 +104,9 @@ mod tests {
             CommitmentSchemeProver::<SimdBackend, Blake2sMerkleChannel>::new(config, &twiddles);
 
         let mut tree_builder = commitment_scheme.tree_builder();
-        tree_builder.extend_evals([]);  
+        tree_builder.extend_evals([]);
         tree_builder.extend_evals(vec![is_first_col]);
-        tree_builder.extend_evals( 
+        tree_builder.extend_evals(
             chain![
                 XorTable::new(12, 4, 0).generate_constant_trace(),
                 XorTable::new(9, 2, 0).generate_constant_trace(),
@@ -104,10 +122,8 @@ mod tests {
         let mut tree_builder = commitment_scheme.tree_builder();
         tree_builder.extend_evals(bridge_trace.clone());
         tree_builder.extend_evals(double_trace.0.clone());
-        tree_builder.extend_evals(              
-            blake_scheduler_trace.clone()
-        );
-        for round_trace in &blake_round_traces {   
+        tree_builder.extend_evals(blake_scheduler_trace.clone());
+        for round_trace in &blake_round_traces {
             tree_builder.extend_evals(round_trace.clone());
         }
         tree_builder.extend_evals(blake_xor_trace12.clone());
@@ -123,12 +139,18 @@ mod tests {
 
         let (bridge_interaction_trace, bridge_claimed_sum) =
             gen_bridge_interaction_trace(&bridge_trace, &input_elements);
-        println!("Bridge interaction trace: {} columns", bridge_interaction_trace.len());
+        println!(
+            "Bridge interaction trace: {} columns",
+            bridge_interaction_trace.len()
+        );
         println!("Bridge claimed sum: {:?}", bridge_claimed_sum);
 
         let (double_interaction_trace, double_claimed_sum) =
             gen_double_interaction_trace(&double_trace.0, &input_elements);
-        println!("Double interaction trace: {} columns", double_interaction_trace.len());
+        println!(
+            "Double interaction trace: {} columns",
+            double_interaction_trace.len()
+        );
         println!("Double claimed sum: {:?}", double_claimed_sum);
 
         let (blake_scheduler_interaction_trace, blake_scheduler_claimed_sum) =
@@ -140,23 +162,26 @@ mod tests {
                 &blake_scheduler_trace,
                 &input_elements,
             );
-        println!("Blake3 scheduler interaction trace: {} columns", blake_scheduler_interaction_trace.len());
-        println!("Blake3 scheduler claimed sum: {:?}", blake_scheduler_claimed_sum);
+        println!(
+            "Blake3 scheduler interaction trace: {} columns",
+            blake_scheduler_interaction_trace.len()
+        );
+        println!(
+            "Blake3 scheduler claimed sum: {:?}",
+            blake_scheduler_claimed_sum
+        );
 
         let (blake_round_interaction_traces, blake_round_claimed_sums): (Vec<_>, Vec<_>) =
-            multiunzip(
-                ROUND_LOG_SPLIT
-                    .iter()
-                    .zip(blake_round_lookup_data)
-                    .map(|(l, lookup_data)| {
-                        round::generate_interaction_trace(
-                            log_size + l,
-                            lookup_data,
-                            &all_elements.xor_elements,
-                            &all_elements.round_elements,
-                        )
-                    }),
-            );
+            multiunzip(ROUND_LOG_SPLIT.iter().zip(blake_round_lookup_data).map(
+                |(l, lookup_data)| {
+                    round::generate_interaction_trace(
+                        log_size + l,
+                        lookup_data,
+                        &all_elements.xor_elements,
+                        &all_elements.round_elements,
+                    )
+                },
+            ));
         println!("Blake3 round interaction traces generated");
 
         let (blake_xor_interaction_trace12, blake_xor_claimed_sum12) =
@@ -189,15 +214,23 @@ mod tests {
         println!("\n=== CLAIMED SUM BREAKDOWN ===");
         println!("Bridge claimed sum:           {:?}", bridge_claimed_sum);
         println!("Double (Fibonacci) claimed:   {:?}", double_claimed_sum);
-        println!("Blake3 scheduler claimed:     {:?}", blake_scheduler_claimed_sum);
+        println!(
+            "Blake3 scheduler claimed:     {:?}",
+            blake_scheduler_claimed_sum
+        );
 
-        let rounds_sum = blake_round_claimed_sums.iter().sum::<stwo::core::fields::qm31::SecureField>();
+        let rounds_sum = blake_round_claimed_sums
+            .iter()
+            .sum::<stwo::core::fields::qm31::SecureField>();
         println!("Blake3 rounds total:          {:?}", rounds_sum);
         for (i, round_sum) in blake_round_claimed_sums.iter().enumerate() {
             println!("  Round {} claimed sum:       {:?}", i, round_sum);
         }
 
-        println!("Blake3 XOR12 claimed:         {:?}", blake_xor_claimed_sum12);
+        println!(
+            "Blake3 XOR12 claimed:         {:?}",
+            blake_xor_claimed_sum12
+        );
         println!("Blake3 XOR9 claimed:          {:?}", blake_xor_claimed_sum9);
         println!("Blake3 XOR8 claimed:          {:?}", blake_xor_claimed_sum8);
         println!("Blake3 XOR7 claimed:          {:?}", blake_xor_claimed_sum7);
@@ -210,7 +243,10 @@ mod tests {
             + blake_xor_claimed_sum8
             + blake_xor_claimed_sum7
             + blake_xor_claimed_sum4;
-        println!("\nBlake3 TOTAL (internal + input): {:?}", blake3_internal_sum);
+        println!(
+            "\nBlake3 TOTAL (internal + input): {:?}",
+            blake3_internal_sum
+        );
 
         let bridge_double_sum = bridge_claimed_sum + double_claimed_sum;
         println!("Bridge + Double sum:             {:?}", bridge_double_sum);
@@ -227,7 +263,12 @@ mod tests {
         println!("\nTOTAL LogUp sum (all components): {:?}", total_sum);
         println!("=== END BREAKDOWN ===\n");
 
-        assert_eq!(total_sum, SecureField::zero(), "LogUp sum must be zero! Got: {:?}", total_sum);
+        assert_eq!(
+            total_sum,
+            SecureField::zero(),
+            "LogUp sum must be zero! Got: {:?}",
+            total_sum
+        );
         println!("✓ LogUp sum verified to be zero\n");
 
         let mut tree_builder = commitment_scheme.tree_builder();
@@ -263,7 +304,7 @@ mod tests {
                 log_n_rows: log_size,
                 output: input * 2,
                 is_first_id: is_first_column_id(log_size),
-                input_relation: input_elements.clone()
+                input_relation: input_elements.clone(),
             },
             double_claimed_sum,
         );
@@ -291,14 +332,19 @@ mod tests {
         let all_component_provers = chain![
             [&bridge_component as &dyn stwo::prover::ComponentProver<SimdBackend>],
             [&double_component as &dyn stwo::prover::ComponentProver<SimdBackend>],
-            [&blake_components.scheduler_component as &dyn stwo::prover::ComponentProver<SimdBackend>],
-            blake_components.round_components.iter().map(|c| c as &dyn stwo::prover::ComponentProver<SimdBackend>),
+            [&blake_components.scheduler_component
+                as &dyn stwo::prover::ComponentProver<SimdBackend>],
+            blake_components
+                .round_components
+                .iter()
+                .map(|c| c as &dyn stwo::prover::ComponentProver<SimdBackend>),
             [&blake_components.xor12 as &dyn stwo::prover::ComponentProver<SimdBackend>],
             [&blake_components.xor9 as &dyn stwo::prover::ComponentProver<SimdBackend>],
             [&blake_components.xor8 as &dyn stwo::prover::ComponentProver<SimdBackend>],
             [&blake_components.xor7 as &dyn stwo::prover::ComponentProver<SimdBackend>],
             [&blake_components.xor4 as &dyn stwo::prover::ComponentProver<SimdBackend>],
-        ].collect_vec();
+        ]
+        .collect_vec();
 
         let proof = prove::<SimdBackend, Blake2sMerkleChannel>(
             &all_component_provers,
@@ -338,15 +384,28 @@ mod tests {
             .copied()
             .collect();
 
-        commitment_scheme_verifier.commit(proof.commitments[0], &combined_preprocessed_sizes, verifier_channel);
-        commitment_scheme_verifier.commit(proof.commitments[1], &combined_base_sizes, verifier_channel);
-        commitment_scheme_verifier.commit(proof.commitments[2], &combined_interaction_sizes, verifier_channel);
+        commitment_scheme_verifier.commit(
+            proof.commitments[0],
+            &combined_preprocessed_sizes,
+            verifier_channel,
+        );
+        commitment_scheme_verifier.commit(
+            proof.commitments[1],
+            &combined_base_sizes,
+            verifier_channel,
+        );
+        commitment_scheme_verifier.commit(
+            proof.commitments[2],
+            &combined_interaction_sizes,
+            verifier_channel,
+        );
 
         let all_components_for_verify = chain![
             [&bridge_component as &dyn Component],
             [&double_component as &dyn Component],
             blake_components.as_components_vec()
-        ].collect_vec();
+        ]
+        .collect_vec();
 
         verify(
             &all_components_for_verify,

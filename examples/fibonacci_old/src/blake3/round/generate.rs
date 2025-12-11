@@ -1,25 +1,25 @@
 use std::simd::u32x16;
 use std::vec;
 
-use itertools::{chain, Itertools};
+use itertools::{Itertools, chain};
 use num_traits::One;
+use stwo::core::ColumnVec;
 use stwo::core::fields::m31::BaseField;
 use stwo::core::fields::qm31::SecureField;
 use stwo::core::poly::circle::CanonicCoset;
-use stwo::core::ColumnVec;
-use stwo::prover::backend::simd::column::BaseColumn;
-use stwo::prover::backend::simd::m31::{PackedBaseField, LOG_N_LANES};
-use stwo::prover::backend::simd::qm31::PackedSecureField;
 use stwo::prover::backend::simd::SimdBackend;
+use stwo::prover::backend::simd::column::BaseColumn;
+use stwo::prover::backend::simd::m31::{LOG_N_LANES, PackedBaseField};
+use stwo::prover::backend::simd::qm31::PackedSecureField;
 use stwo::prover::backend::{Col, Column};
-use stwo::prover::poly::circle::CircleEvaluation;
 use stwo::prover::poly::BitReversedOrder;
-use stwo_constraint_framework::{LogupTraceGenerator, Relation, ORIGINAL_TRACE_IDX};
-use tracing::{span, Level};
+use stwo::prover::poly::circle::CircleEvaluation;
+use stwo_constraint_framework::{LogupTraceGenerator, ORIGINAL_TRACE_IDX, Relation};
+use tracing::{Level, span};
 
 use super::{BlakeXorElements, RoundElements};
 use crate::blake3::round::blake_round_info;
-use crate::blake3::{to_felts, XorAccums, N_ROUND_INPUT_FELTS, STATE_SIZE};
+use crate::blake3::{N_ROUND_INPUT_FELTS, STATE_SIZE, XorAccums, to_felts};
 
 #[derive(Clone)]
 pub struct BlakeRoundLookupData {

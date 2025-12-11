@@ -6,8 +6,13 @@
 mod tests {
     use stwo::core::poly::circle::CanonicCoset;
 
-    use crate::bridge::{gen_bridge_interaction_trace, gen_bridge_trace, IndexBridgeComponent, IndexBridgeEval, IndexRelation};
-    use crate::fibonacci::{gen_fib_interaction_trace, gen_fib_trace, gen_is_first_column, is_first_column_id, FibEval};
+    use crate::bridge::{
+        IndexBridgeComponent, IndexBridgeEval, IndexRelation, gen_bridge_interaction_trace,
+        gen_bridge_trace,
+    };
+    use crate::fibonacci::{
+        FibEval, gen_fib_interaction_trace, gen_fib_trace, gen_is_first_column, is_first_column_id,
+    };
 
     #[test]
     fn test_bridge_only_prove_verify() {
@@ -18,7 +23,7 @@ mod tests {
         use stwo::core::verifier::verify;
         use stwo::prover::backend::simd::SimdBackend;
         use stwo::prover::poly::circle::PolyOps;
-        use stwo::prover::{prove, CommitmentSchemeProver};
+        use stwo::prover::{CommitmentSchemeProver, prove};
         use stwo_constraint_framework::TraceLocationAllocator;
 
         let log_size = 10;
@@ -60,7 +65,10 @@ mod tests {
         println!("\n=== Step 6: Generate Bridge interaction trace ===");
         let (bridge_interaction_trace, bridge_claimed_sum) =
             gen_bridge_interaction_trace(&bridge_trace, &index_elements);
-        println!("✓ Bridge interaction trace: {} columns", bridge_interaction_trace.len());
+        println!(
+            "✓ Bridge interaction trace: {} columns",
+            bridge_interaction_trace.len()
+        );
         println!("  Bridge claimed sum: {:?}", bridge_claimed_sum);
 
         println!("\n=== Step 7: Commit interaction trace ===");
@@ -123,7 +131,7 @@ mod tests {
         use stwo::core::verifier::verify;
         use stwo::prover::backend::simd::SimdBackend;
         use stwo::prover::poly::circle::PolyOps;
-        use stwo::prover::{prove, CommitmentSchemeProver};
+        use stwo::prover::{CommitmentSchemeProver, prove};
         use stwo_constraint_framework::TraceLocationAllocator;
 
         let log_size = 10;
@@ -150,12 +158,12 @@ mod tests {
             CommitmentSchemeProver::<SimdBackend, Blake2sMerkleChannel>::new(config, &twiddles);
 
         let mut tree_builder = commitment_scheme.tree_builder();
-        tree_builder.extend_evals([]);  
+        tree_builder.extend_evals([]);
         tree_builder.extend_evals(vec![is_first_col]);
         tree_builder.commit(prover_channel);
 
         let mut tree_builder = commitment_scheme.tree_builder();
-        tree_builder.extend_evals(bridge_trace.clone()); 
+        tree_builder.extend_evals(bridge_trace.clone());
         tree_builder.extend_evals(fib_trace.clone());
         tree_builder.commit(prover_channel);
 
@@ -163,20 +171,26 @@ mod tests {
 
         let (bridge_interaction_trace, bridge_claimed_sum) =
             gen_bridge_interaction_trace(&bridge_trace, &index_elements);
-        println!("Bridge interaction trace: {} columns", bridge_interaction_trace.len());
+        println!(
+            "Bridge interaction trace: {} columns",
+            bridge_interaction_trace.len()
+        );
         println!("Bridge claimed sum: {:?}", bridge_claimed_sum);
 
         let (fib_interaction_trace, fib_claimed_sum) =
             gen_fib_interaction_trace(&fib_trace, &index_elements);
-        println!("Fibonacci interaction trace: {} columns", fib_interaction_trace.len());
+        println!(
+            "Fibonacci interaction trace: {} columns",
+            fib_interaction_trace.len()
+        );
         println!("Fibonacci claimed sum: {:?}", fib_claimed_sum);
 
         let total_sum = bridge_claimed_sum + fib_claimed_sum;
         println!("Total LogUp sum (should be ~0): {:?}", total_sum);
 
         let mut tree_builder = commitment_scheme.tree_builder();
-        tree_builder.extend_evals(bridge_interaction_trace);  
-        tree_builder.extend_evals(fib_interaction_trace); 
+        tree_builder.extend_evals(bridge_interaction_trace);
+        tree_builder.extend_evals(fib_interaction_trace);
         tree_builder.commit(prover_channel);
 
         let mut tree_span_provider = TraceLocationAllocator::default();
@@ -191,7 +205,10 @@ mod tests {
             bridge_claimed_sum,
         );
         println!("Bridge component created");
-        println!("Bridge trace_log_degree_bounds: {:?}", bridge_component.trace_log_degree_bounds());
+        println!(
+            "Bridge trace_log_degree_bounds: {:?}",
+            bridge_component.trace_log_degree_bounds()
+        );
 
         let fib_component = crate::fibonacci::SimpleFibComponent::new(
             &mut tree_span_provider,
@@ -204,7 +221,10 @@ mod tests {
             fib_claimed_sum,
         );
         println!("Fibonacci component created");
-        println!("Fibonacci trace_log_degree_bounds: {:?}", fib_component.trace_log_degree_bounds());
+        println!(
+            "Fibonacci trace_log_degree_bounds: {:?}",
+            fib_component.trace_log_degree_bounds()
+        );
 
         let proof = prove::<SimdBackend, Blake2sMerkleChannel>(
             &[&bridge_component, &fib_component],
@@ -239,9 +259,21 @@ mod tests {
             .copied()
             .collect();
 
-        commitment_scheme_verifier.commit(proof.commitments[0], &combined_preprocessed_sizes, verifier_channel);
-        commitment_scheme_verifier.commit(proof.commitments[1], &combined_base_sizes, verifier_channel);
-        commitment_scheme_verifier.commit(proof.commitments[2], &combined_interaction_sizes, verifier_channel);
+        commitment_scheme_verifier.commit(
+            proof.commitments[0],
+            &combined_preprocessed_sizes,
+            verifier_channel,
+        );
+        commitment_scheme_verifier.commit(
+            proof.commitments[1],
+            &combined_base_sizes,
+            verifier_channel,
+        );
+        commitment_scheme_verifier.commit(
+            proof.commitments[2],
+            &combined_interaction_sizes,
+            verifier_channel,
+        );
 
         verify(
             &[&bridge_component, &fib_component],

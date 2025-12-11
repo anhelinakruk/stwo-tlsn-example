@@ -1,15 +1,15 @@
 use num_traits::{One, Zero};
+use stwo::core::ColumnVec;
 use stwo::core::fields::m31::BaseField;
 use stwo::core::fields::qm31::SecureField;
 use stwo::core::poly::circle::CanonicCoset;
 use stwo::core::utils::bit_reverse_coset_to_circle_domain_order;
-use stwo::core::ColumnVec;
+use stwo::prover::backend::simd::SimdBackend;
 use stwo::prover::backend::simd::m31::LOG_N_LANES;
 use stwo::prover::backend::simd::qm31::PackedSecureField;
-use stwo::prover::backend::simd::SimdBackend;
 use stwo::prover::backend::{Col, Column};
-use stwo::prover::poly::circle::CircleEvaluation;
 use stwo::prover::poly::BitReversedOrder;
+use stwo::prover::poly::circle::CircleEvaluation;
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
 
 use super::ValueRelation;
@@ -26,7 +26,8 @@ pub fn gen_fib_trace(
     assert!(
         fibonacci_index < n_rows,
         "fibonacci_index ({}) must be less than n_rows ({})",
-        fibonacci_index, n_rows
+        fibonacci_index,
+        n_rows
     );
 
     let mut col_a = Col::<SimdBackend, BaseField>::zeros(n_rows);
@@ -35,7 +36,7 @@ pub fn gen_fib_trace(
 
     let mut a = BaseField::zero();
     let mut b = BaseField::one();
-    let mut target_value = 0u32; 
+    let mut target_value = 0u32;
 
     for row in 0..n_rows {
         let c = a + b;
@@ -82,7 +83,7 @@ pub fn gen_fib_interaction_trace(
     {
         let mut col_gen = logup_gen.new_col();
 
-        let a_col = &main_trace[0];           
+        let a_col = &main_trace[0];
         let is_target_col = &preprocessed[1];
 
         for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {

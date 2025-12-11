@@ -1,10 +1,14 @@
-use super::types::{received_commitments, FibZKProofBundle};
+use super::types::{FibZKProofBundle, received_commitments};
 
 use stwo::core::pcs::PcsConfig;
 use stwo::core::proof::StarkProof;
 use stwo::core::vcs::blake2_merkle::Blake2sMerkleHasher;
 use tlsn::{
-    config::{CertificateDer, ProtocolConfigValidator, RootCertStore}, connection::ServerName, hash::HashAlgId, transcript::{Direction, PartialTranscript}, verifier::{Verifier, VerifierConfig, VerifierOutput, VerifyConfig}
+    config::{CertificateDer, ProtocolConfigValidator, RootCertStore},
+    connection::ServerName,
+    hash::HashAlgId,
+    transcript::{Direction, PartialTranscript},
+    verifier::{Verifier, VerifierConfig, VerifierOutput, VerifyConfig},
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -160,7 +164,7 @@ pub async fn verifier<T: AsyncWrite + AsyncRead + Send + Sync + Unpin + 'static>
         "fibonacci_index committed via hash: {}",
         hex::encode(committed_hash.value.as_bytes())
     );
- 
+
     tracing::info!(
         "ZK proof verified: computed Fibonacci value at index {}",
         proof_bundle.target_element_computing,

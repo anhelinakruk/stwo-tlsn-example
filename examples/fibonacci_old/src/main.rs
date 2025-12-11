@@ -9,16 +9,16 @@ use std::{
 };
 use verifier::verifier;
 
-pub mod prover;
-pub mod verifier;
-pub mod fibonacci;
-pub mod types;
-pub mod bridge;
 pub mod blake3;
+pub mod bridge;
+pub mod fibonacci;
+pub mod prover;
+pub mod types;
+pub mod verifier;
 
+mod blake_solo_test;
 #[cfg(test)]
 mod bridge_fib_test;
-mod blake_solo_test;
 mod full_test;
 
 const TEST_SERVER_DOMAIN: &str = "localhost";
@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .parse()
         .map_err(|e| format!("Invalid IP address '{}': {}", server_host, e))?;
     let server_addr = SocketAddr::from((server_ip, server_port));
-    
+
     tracing::info!("Server: {}", uri);
     tracing::info!("Address: {}", server_addr);
 
@@ -70,4 +70,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 pub fn bytes_to_redacted_string(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).replace('\0', "🙈")
 }
-

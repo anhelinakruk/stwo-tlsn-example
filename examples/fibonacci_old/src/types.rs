@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
-use spansy::http::{BodyContent, Responses};
 use spansy::Spanned;
+use spansy::http::{BodyContent, Responses};
 use tlsn::hash::HashAlgId;
-use tlsn::transcript::{Direction, TranscriptCommitment, TranscriptSecret, hash::{PlaintextHash, PlaintextHashSecret}};
+use tlsn::transcript::{
+    Direction, TranscriptCommitment, TranscriptSecret,
+    hash::{PlaintextHash, PlaintextHashSecret},
+};
 
 /// Bundle containing the Multi-Fibonacci ZK proof with scheduler
 #[derive(Serialize, Deserialize, Debug)]
@@ -41,9 +44,7 @@ pub fn received_secrets(transcript_secrets: &[TranscriptSecret]) -> Vec<&Plainte
         .collect()
 }
 
-pub fn extract_fibonacci_index(
-    received: &[u8],
-) -> Result<usize, Box<dyn std::error::Error>> {
+pub fn extract_fibonacci_index(received: &[u8]) -> Result<usize, Box<dyn std::error::Error>> {
     let resp = Responses::new_from_slice(received).collect::<Result<Vec<_>, _>>()?;
     let response = resp.first().ok_or("No responses found")?;
     let body = response.body.as_ref().ok_or("Response body not found")?;
@@ -118,7 +119,10 @@ pub fn verify_fibonacci_index_commitment(
             fibonacci_index
         );
         tracing::error!("  Expected (committed): {}", hex::encode(committed_hash));
-        tracing::error!("  Computed:             {}", hex::encode(computed_hash.as_bytes()));
+        tracing::error!(
+            "  Computed:             {}",
+            hex::encode(computed_hash.as_bytes())
+        );
         return Err("Computed hash does not match committed hash".into());
     }
 

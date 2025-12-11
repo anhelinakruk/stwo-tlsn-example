@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign, Mul, Sub};
 
-use itertools::{chain, Itertools};
+use itertools::{Itertools, chain};
 use num_traits::{One, Zero};
-use stwo::core::fields::m31::BaseField;
 use stwo::core::fields::FieldExpOps;
+use stwo::core::fields::m31::BaseField;
 use stwo_constraint_framework::{EvalAtRow, RelationEntry};
 
 use crate::blake3::blake3::MSG_SCHEDULE;
@@ -15,7 +15,10 @@ use crate::blake3::{Fu32, N_ROUNDS, STATE_SIZE};
 use crate::bridge::InputRelation;
 
 /// Applies Blake3 MSG_SCHEDULE permutation `iterations` times to messages
-fn apply_blake3_permutation<F>(messages: &[Fu32<F>; STATE_SIZE], iterations: usize) -> [Fu32<F>; STATE_SIZE]
+fn apply_blake3_permutation<F>(
+    messages: &[Fu32<F>; STATE_SIZE],
+    iterations: usize,
+) -> [Fu32<F>; STATE_SIZE]
 where
     F: FieldExpOps
         + Clone
@@ -92,7 +95,10 @@ pub fn eval_blake_scheduler_constraints<E: EvalAtRow>(
             &chain![
                 last_round_input.iter().cloned().flat_map(Fu32::into_felts),
                 last_round_output.iter().cloned().flat_map(Fu32::into_felts),
-                last_round_messages.iter().cloned().flat_map(Fu32::into_felts)
+                last_round_messages
+                    .iter()
+                    .cloned()
+                    .flat_map(Fu32::into_felts)
             ]
             .collect_vec(),
         ));
@@ -116,12 +122,11 @@ pub fn eval_blake_scheduler_constraints<E: EvalAtRow>(
     eval.add_to_relation(RelationEntry::new(
         input_relation,
         E::EF::from(multiplicity),
-        &[input]
+        &[input],
     ));
 
     // Finalize - framework pairs lookups automatically
     eval.finalize_logup_in_pairs();
-
 }
 
 fn eval_next_u32<E: EvalAtRow>(eval: &mut E) -> Fu32<E::F> {

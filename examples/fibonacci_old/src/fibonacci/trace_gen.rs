@@ -1,15 +1,15 @@
 use num_traits::{One, Zero};
+use stwo::core::ColumnVec;
 use stwo::core::fields::m31::BaseField;
 use stwo::core::fields::qm31::SecureField;
 use stwo::core::poly::circle::CanonicCoset;
 use stwo::core::utils::bit_reverse_coset_to_circle_domain_order;
-use stwo::core::ColumnVec;
+use stwo::prover::backend::simd::SimdBackend;
 use stwo::prover::backend::simd::m31::LOG_N_LANES;
 use stwo::prover::backend::simd::qm31::PackedSecureField;
-use stwo::prover::backend::simd::SimdBackend;
 use stwo::prover::backend::{Col, Column};
-use stwo::prover::poly::circle::CircleEvaluation;
 use stwo::prover::poly::BitReversedOrder;
+use stwo::prover::poly::circle::CircleEvaluation;
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
 
 use crate::bridge::IndexRelation;
@@ -45,7 +45,7 @@ pub fn gen_fib_trace(
 
         if row == 0 {
             col_index_used.set(row, index_value);
-            col_index_multiplicity.set(row, BaseField::one()); 
+            col_index_multiplicity.set(row, BaseField::one());
         }
 
         if row == fibonacci_index {

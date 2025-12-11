@@ -1,25 +1,29 @@
 #[cfg(test)]
 mod tests {
-    use stwo::core::channel::{Blake2sChannel};
+    use itertools::{Itertools, chain, multiunzip};
+    use num_traits::Zero;
+    use stwo::core::channel::Blake2sChannel;
+    use stwo::core::pcs::PcsConfig;
     use stwo::core::poly::circle::CanonicCoset;
     use stwo::core::vcs::blake2_merkle::Blake2sMerkleChannel;
-    use stwo::core::pcs::PcsConfig;
-    use stwo::prover::{CommitmentSchemeProver, backend::simd::SimdBackend, prove};
     use stwo::prover::poly::circle::PolyOps;
-    use itertools::{chain, Itertools, multiunzip};
-    use num_traits::Zero;
+    use stwo::prover::{CommitmentSchemeProver, backend::simd::SimdBackend, prove};
 
-    use crate::bridge::IndexRelation;
     use crate::blake3::{
+        BlakeXorElements, ROUND_LOG_SPLIT, XorAccums,
+        preprocessed_columns::XorTable,
+        round::{self, RoundElements},
         scheduler::{self, BlakeElements},
-        BlakeXorElements, XorAccums, ROUND_LOG_SPLIT,
-        round::{self, RoundElements}, xor_table, preprocessed_columns::XorTable,
+        xor_table,
     };
+    use crate::bridge::IndexRelation;
 
     const LOG_N_LANES: u32 = 4;
     use stwo_constraint_framework::TraceLocationAllocator;
 
-    fn preprocessed_columns(_log_size: u32) -> Vec<stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId> {
+    fn preprocessed_columns(
+        _log_size: u32,
+    ) -> Vec<stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId> {
         vec![
             XorTable::new(12, 4, 0).id(),
             XorTable::new(12, 4, 1).id(),
@@ -48,7 +52,8 @@ mod tests {
 
         // Precompute twiddles
         const XOR_TABLE_MAX_LOG_SIZE: u32 = 16;
-        let log_max_rows = (log_size + *ROUND_LOG_SPLIT.iter().max().unwrap()).max(XOR_TABLE_MAX_LOG_SIZE);
+        let log_max_rows =
+            (log_size + *ROUND_LOG_SPLIT.iter().max().unwrap()).max(XOR_TABLE_MAX_LOG_SIZE);
         let twiddles = SimdBackend::precompute_twiddles(
             CanonicCoset::new(log_max_rows + 1 + config.fri_config.log_blowup_factor)
                 .circle_domain()
@@ -66,7 +71,8 @@ mod tests {
 
         // Setup protocol
         let channel = &mut Blake2sChannel::default();
-        let mut commitment_scheme = CommitmentSchemeProver::<SimdBackend, Blake2sMerkleChannel>::new(config, &twiddles);
+        let mut commitment_scheme =
+            CommitmentSchemeProver::<SimdBackend, Blake2sMerkleChannel>::new(config, &twiddles);
 
         // Preprocessed columns
         let mut tree_builder = commitment_scheme.tree_builder();
@@ -123,7 +129,7 @@ mod tests {
         tree_builder.commit(channel);
 
         // Draw interaction elements
-        let index_relation = IndexRelation::draw(channel);  // Draw from channel, not dummy
+        let index_relation = IndexRelation::draw(channel); // Draw from channel, not dummy
         let round_elements = RoundElements::draw(channel);
         let blake_elements = BlakeElements::draw(channel);
         let xor_elements = BlakeXorElements::draw(channel);
@@ -153,11 +159,16 @@ mod tests {
                 }),
         );
 
-        let (xor_interaction12, xor12_claimed_sum) = xor_table::xor12::generate_interaction_trace(xor_lookup_data12, &xor_elements.xor12);
-        let (xor_interaction9, xor9_claimed_sum) = xor_table::xor9::generate_interaction_trace(xor_lookup_data9, &xor_elements.xor9);
-        let (xor_interaction8, xor8_claimed_sum) = xor_table::xor8::generate_interaction_trace(xor_lookup_data8, &xor_elements.xor8);
-        let (xor_interaction7, xor7_claimed_sum) = xor_table::xor7::generate_interaction_trace(xor_lookup_data7, &xor_elements.xor7);
-        let (xor_interaction4, xor4_claimed_sum) = xor_table::xor4::generate_interaction_trace(xor_lookup_data4, &xor_elements.xor4);
+        let (xor_interaction12, xor12_claimed_sum) =
+            xor_table::xor12::generate_interaction_trace(xor_lookup_data12, &xor_elements.xor12);
+        let (xor_interaction9, xor9_claimed_sum) =
+            xor_table::xor9::generate_interaction_trace(xor_lookup_data9, &xor_elements.xor9);
+        let (xor_interaction8, xor8_claimed_sum) =
+            xor_table::xor8::generate_interaction_trace(xor_lookup_data8, &xor_elements.xor8);
+        let (xor_interaction7, xor7_claimed_sum) =
+            xor_table::xor7::generate_interaction_trace(xor_lookup_data7, &xor_elements.xor7);
+        let (xor_interaction4, xor4_claimed_sum) =
+            xor_table::xor4::generate_interaction_trace(xor_lookup_data4, &xor_elements.xor4);
 
         println!("DEBUG: round_claimed_sums = {:?}", round_claimed_sums);
         println!("DEBUG: xor12_claimed_sum = {:?}", xor12_claimed_sum);
@@ -169,9 +180,14 @@ mod tests {
         // Calculate total sum
         use stwo::core::fields::qm31::QM31;
         let total_sum = scheduler_claimed_sum
-            + round_claimed_sums.iter().fold(QM31::zero(), |acc, &x| acc + x)
-            + xor12_claimed_sum + xor9_claimed_sum + xor8_claimed_sum
-            + xor7_claimed_sum + xor4_claimed_sum;
+            + round_claimed_sums
+                .iter()
+                .fold(QM31::zero(), |acc, &x| acc + x)
+            + xor12_claimed_sum
+            + xor9_claimed_sum
+            + xor8_claimed_sum
+            + xor7_claimed_sum
+            + xor4_claimed_sum;
         println!("DEBUG: TOTAL claimed sum = {:?}", total_sum);
         println!("DEBUG: Should be ZERO for valid proof!");
 
@@ -192,10 +208,12 @@ mod tests {
         tree_builder.commit(channel);
 
         // Prove - using BlakeComponentsForIntegration
-        let tree_span_provider = &mut TraceLocationAllocator::new_with_preprocessed_columns(&preprocessed_columns(log_size));
+        let tree_span_provider = &mut TraceLocationAllocator::new_with_preprocessed_columns(
+            &preprocessed_columns(log_size),
+        );
 
         // Try using regular BlakeComponents instead
-        use crate::blake3::{BlakeComponents, BlakeStatement0, BlakeStatement1, AllElements};
+        use crate::blake3::{AllElements, BlakeComponents, BlakeStatement0, BlakeStatement1};
         let components = BlakeComponents::new(
             &BlakeStatement0 { log_size },
             &AllElements {
@@ -222,7 +240,8 @@ mod tests {
             &component_provers,
             channel,
             commitment_scheme,
-        ).unwrap();
+        )
+        .unwrap();
 
         println!("BLAKE3 SOLO PROOF GENERATED!");
         println!("Proof commitments: {}", proof.commitments.len());

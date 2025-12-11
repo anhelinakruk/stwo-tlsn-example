@@ -24,7 +24,7 @@ impl FrameworkEval for IndexBridgeEval {
         eval.add_to_relation(RelationEntry::new(
             &self.index_relation,
             -E::EF::from(multiplicity_curr),
-            &[index_curr]
+            &[index_curr],
         ));
 
         eval.finalize_logup();
@@ -33,4 +33,3 @@ impl FrameworkEval for IndexBridgeEval {
 }
 
 pub type IndexBridgeComponent = FrameworkComponent<IndexBridgeEval>;
-

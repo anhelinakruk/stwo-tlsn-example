@@ -1,25 +1,25 @@
 use std::simd::u32x16;
 
-use itertools::{chain, Itertools};
+use itertools::{Itertools, chain};
 use num_traits::{One, Zero};
+use stwo::core::ColumnVec;
 use stwo::core::fields::m31::BaseField;
 use stwo::core::fields::qm31::SecureField;
 use stwo::core::poly::circle::CanonicCoset;
-use stwo::core::ColumnVec;
-use stwo::prover::backend::simd::column::BaseColumn;
-use stwo::prover::backend::simd::m31::{LOG_N_LANES};
-use stwo::prover::backend::simd::qm31::PackedSecureField;
 use stwo::prover::backend::simd::SimdBackend;
+use stwo::prover::backend::simd::column::BaseColumn;
+use stwo::prover::backend::simd::m31::LOG_N_LANES;
+use stwo::prover::backend::simd::qm31::PackedSecureField;
 use stwo::prover::backend::{Col, Column};
-use stwo::prover::poly::circle::CircleEvaluation;
 use stwo::prover::poly::BitReversedOrder;
+use stwo::prover::poly::circle::CircleEvaluation;
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
-use tracing::{span, Level};
+use tracing::{Level, span};
 
 use super::BlakeElements;
 use crate::blake3::blake3;
 use crate::blake3::round::{BlakeRoundInput, RoundElements};
-use crate::blake3::{to_felts, N_ROUNDS, N_ROUND_INPUT_FELTS, STATE_SIZE};
+use crate::blake3::{N_ROUND_INPUT_FELTS, N_ROUNDS, STATE_SIZE, to_felts};
 
 #[derive(Copy, Clone, Default)]
 pub struct BlakeInput {
@@ -68,7 +68,7 @@ pub fn gen_trace(
         .collect_vec();
 
     for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {
-        let mut col_index = 0;  // Start from column 0
+        let mut col_index = 0; // Start from column 0
 
         let mut write_u32_array = |x: [u32x16; STATE_SIZE], col_index: &mut usize| {
             x.iter().for_each(|x| {
@@ -119,7 +119,6 @@ pub fn gen_trace(
         .enumerate()
         .for_each(|(i, val)| lookup_data.blake_lookups[i].data[vec_row] = val);
 
-
         let mut col_input = Col::<SimdBackend, BaseField>::zeros(1 << log_size);
         let mut col_multiplicity = Col::<SimdBackend, BaseField>::zeros(1 << log_size);
 
@@ -144,12 +143,22 @@ pub fn gen_trace(
 
         // DEBUG: Print first few vec_rows
         if vec_row < 3 {
-            println!("Blake scheduler vec_row {}: input packed = {:?}", vec_row, trace[n_cols].data[vec_row]);
-            println!("Blake scheduler vec_row {}: multiplicity packed = {:?}", vec_row, trace[n_cols+1].data[vec_row]);
+            println!(
+                "Blake scheduler vec_row {}: input packed = {:?}",
+                vec_row, trace[n_cols].data[vec_row]
+            );
+            println!(
+                "Blake scheduler vec_row {}: multiplicity packed = {:?}",
+                vec_row,
+                trace[n_cols + 1].data[vec_row]
+            );
         }
     }
 
-    println!("Blake scheduler total vec_rows: {}", 1 << (log_size - LOG_N_LANES));
+    println!(
+        "Blake scheduler total vec_rows: {}",
+        1 << (log_size - LOG_N_LANES)
+    );
 
     let domain = CanonicCoset::new(log_size).circle_domain();
     let trace = trace

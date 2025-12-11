@@ -1,7 +1,9 @@
 use num_traits::One;
 use stwo::core::fields::m31::BaseField;
 use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
-use stwo_constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval, RelationEntry, ORIGINAL_TRACE_IDX};
+use stwo_constraint_framework::{
+    EvalAtRow, FrameworkComponent, FrameworkEval, ORIGINAL_TRACE_IDX, RelationEntry,
+};
 
 use super::LOG_CONSTRAINT_DEGREE;
 use crate::bridge::IndexRelation;
@@ -11,7 +13,7 @@ pub struct FibEval {
     pub log_n_rows: u32,
     pub fibonacci_value: u32,
     pub is_first_id: PreProcessedColumnId,
-    pub index_relation: IndexRelation, 
+    pub index_relation: IndexRelation,
 }
 
 impl FrameworkEval for FibEval {
@@ -54,7 +56,7 @@ impl FrameworkEval for FibEval {
         // CONSTRAINT 6: is_target is boolean (0 or 1)
         eval.add_constraint(is_target_curr.clone() * (is_target_curr.clone() - E::F::one()));
 
-        // CONSTRAINT 7: is_target sums to exactly 1 
+        // CONSTRAINT 7: is_target sums to exactly 1
         eval.add_constraint(not_first.clone() * is_target_curr.clone() * is_target_prev);
 
         // CONSTRAINT 8: At target row, verify a = fibonacci_value
@@ -64,8 +66,8 @@ impl FrameworkEval for FibEval {
         // Logup Bridge
         eval.add_to_relation(RelationEntry::new(
             &self.index_relation,
-            E::EF::from(index_multiplicity), 
-            &[index_used]
+            E::EF::from(index_multiplicity),
+            &[index_used],
         ));
 
         eval.finalize_logup_in_pairs();

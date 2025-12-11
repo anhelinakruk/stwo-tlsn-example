@@ -1,25 +1,25 @@
 use std::simd::u32x16;
 
-use itertools::{chain, Itertools};
+use itertools::{Itertools, chain};
 use num_traits::{One, Zero};
+use stwo::core::ColumnVec;
 use stwo::core::fields::m31::BaseField;
 use stwo::core::fields::qm31::SecureField;
 use stwo::core::poly::circle::CanonicCoset;
-use stwo::core::ColumnVec;
-use stwo::prover::backend::simd::column::BaseColumn;
-use stwo::prover::backend::simd::m31::{LOG_N_LANES};
-use stwo::prover::backend::simd::qm31::PackedSecureField;
 use stwo::prover::backend::simd::SimdBackend;
+use stwo::prover::backend::simd::column::BaseColumn;
+use stwo::prover::backend::simd::m31::LOG_N_LANES;
+use stwo::prover::backend::simd::qm31::PackedSecureField;
 use stwo::prover::backend::{Col, Column};
-use stwo::prover::poly::circle::CircleEvaluation;
 use stwo::prover::poly::BitReversedOrder;
+use stwo::prover::poly::circle::CircleEvaluation;
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
-use tracing::{span, Level};
+use tracing::{Level, span};
 
 use super::BlakeElements;
 use crate::blake3::blake3;
 use crate::blake3::round::{BlakeRoundInput, RoundElements};
-use crate::blake3::{to_felts, N_ROUNDS, N_ROUND_INPUT_FELTS, STATE_SIZE};
+use crate::blake3::{N_ROUND_INPUT_FELTS, N_ROUNDS, STATE_SIZE, to_felts};
 use crate::fibonacci::ValueRelation;
 
 #[derive(Copy, Clone, Default)]
@@ -47,42 +47,41 @@ impl BlakeSchedulerLookupData {
 }
 
 pub fn prepare_blake_input_from_u32(value: u32) -> BlakeInput {
-      // Pad to 64 bytes
-      let mut padded = [0u8; 64];
-      padded[..4].copy_from_slice(&value.to_le_bytes());
+    // Pad to 64 bytes
+    let mut padded = [0u8; 64];
+    padded[..4].copy_from_slice(&value.to_le_bytes());
 
-      // Convert to message
-      let message: [u32; 16] = std::array::from_fn(|i| {
-          u32::from_le_bytes([
-              padded[i * 4],
-              padded[i * 4 + 1],
-              padded[i * 4 + 2],
-              padded[i * 4 + 3],
-          ])
-      });
+    // Convert to message
+    let message: [u32; 16] = std::array::from_fn(|i| {
+        u32::from_le_bytes([
+            padded[i * 4],
+            padded[i * 4 + 1],
+            padded[i * 4 + 2],
+            padded[i * 4 + 3],
+        ])
+    });
 
-      // Blake3 IV
-      const IV: [u32; 8] = [
-          0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A,
-          0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
-      ];
+    // Blake3 IV
+    const IV: [u32; 8] = [
+        0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB,
+        0x5BE0CD19,
+    ];
 
-      // Initialize state
-      let mut v = [0u32; 16];
-      v[0..8].copy_from_slice(&IV);
-      v[8..12].copy_from_slice(&IV[0..4]);
-      v[12] = 0;      // counter_low
-      v[13] = 0;      // counter_high  
-      v[14] = 4;      // block_len (4 bytes for u32)
-      v[15] = 0b1011; // CHUNK_START | CHUNK_END | ROOT
+    // Initialize state
+    let mut v = [0u32; 16];
+    v[0..8].copy_from_slice(&IV);
+    v[8..12].copy_from_slice(&IV[0..4]);
+    v[12] = 0; // counter_low
+    v[13] = 0; // counter_high  
+    v[14] = 4; // block_len (4 bytes for u32)
+    v[15] = 0b1011; // CHUNK_START | CHUNK_END | ROOT
 
-      // Convert to SIMD
-      BlakeInput {
-          v: v.map(u32x16::splat),
-          m: message.map(u32x16::splat),
-      }
-  }
-
+    // Convert to SIMD
+    BlakeInput {
+        v: v.map(u32x16::splat),
+        m: message.map(u32x16::splat),
+    }
+}
 
 pub fn gen_trace(
     log_size: u32,
@@ -109,7 +108,7 @@ pub fn gen_trace(
         .collect_vec();
 
     for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {
-        let mut col_index = 0;  // Start from column 0
+        let mut col_index = 0; // Start from column 0
 
         let mut write_u32_array = |x: [u32x16; STATE_SIZE], col_index: &mut usize| {
             x.iter().for_each(|x| {
@@ -159,10 +158,12 @@ pub fn gen_trace(
         ]
         .enumerate()
         .for_each(|(i, val)| lookup_data.blake_lookups[i].data[vec_row] = val);
-
     }
 
-    println!("Blake scheduler total vec_rows: {}", 1 << (log_size - LOG_N_LANES));
+    println!(
+        "Blake scheduler total vec_rows: {}",
+        1 << (log_size - LOG_N_LANES)
+    );
 
     let domain = CanonicCoset::new(log_size).circle_domain();
     let trace = trace
@@ -180,7 +181,7 @@ pub fn gen_interaction_trace(
     blake_lookup_elements: &BlakeElements,
     input_trace: &ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     preprocessed: &ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
-    value_relation: &ValueRelation
+    value_relation: &ValueRelation,
 ) -> (
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     SecureField,
@@ -232,22 +233,22 @@ pub fn gen_interaction_trace(
     }
 
     {
-      let mut col_gen = logup_gen.new_col();
+        let mut col_gen = logup_gen.new_col();
 
-      let m0_col = &input_trace[0];
-      let is_first_col = &preprocessed[0]; // First preprocessed column is is_first
+        let m0_col = &input_trace[0];
+        let is_first_col = &preprocessed[0]; // First preprocessed column is is_first
 
-      for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {
-          let m0_packed = m0_col.values.data[vec_row];
-          let is_first_packed = is_first_col.values.data[vec_row];
+        for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {
+            let m0_packed = m0_col.values.data[vec_row];
+            let is_first_packed = is_first_col.values.data[vec_row];
 
-          let denom = value_relation.combine(&[PackedSecureField::from(m0_packed)]);
-          let numerator = PackedSecureField::from(is_first_packed);
+            let denom = value_relation.combine(&[PackedSecureField::from(m0_packed)]);
+            let numerator = PackedSecureField::from(is_first_packed);
 
-          col_gen.write_frac(vec_row, numerator, denom);
-      }
+            col_gen.write_frac(vec_row, numerator, denom);
+        }
 
-      col_gen.finalize_col();
+        col_gen.finalize_col();
     }
 
     logup_gen.finalize_last()

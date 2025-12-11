@@ -22,21 +22,21 @@ use stwo::core::fields::qm31::SecureField;
 use stwo::core::pcs::{TreeSubspan, TreeVec};
 use stwo::core::poly::circle::CanonicCoset;
 use stwo::core::{ColumnVec, Fraction};
-use stwo::prover::backend::simd::column::BaseColumn;
-use stwo::prover::backend::simd::m31::{PackedBaseField, LOG_N_LANES};
-use stwo::prover::backend::simd::qm31::PackedSecureField;
-use stwo::prover::backend::simd::SimdBackend;
 use stwo::prover::backend::Column;
-use stwo::prover::poly::circle::CircleEvaluation;
+use stwo::prover::backend::simd::SimdBackend;
+use stwo::prover::backend::simd::column::BaseColumn;
+use stwo::prover::backend::simd::m31::{LOG_N_LANES, PackedBaseField};
+use stwo::prover::backend::simd::qm31::PackedSecureField;
 use stwo::prover::poly::BitReversedOrder;
+use stwo::prover::poly::circle::CircleEvaluation;
 use stwo_constraint_framework::{
-    relation, EvalAtRow, FrameworkComponent, FrameworkEval, InfoEvaluator, LogupTraceGenerator,
-    Relation, RelationEntry, INTERACTION_TRACE_IDX, PREPROCESSED_TRACE_IDX,
+    EvalAtRow, FrameworkComponent, FrameworkEval, INTERACTION_TRACE_IDX, InfoEvaluator,
+    LogupTraceGenerator, PREPROCESSED_TRACE_IDX, Relation, RelationEntry, relation,
 };
-use tracing::{span, Level};
+use tracing::{Level, span};
 
 use super::preprocessed_columns::XorTable;
-use crate::blake3::{XorElements12, XorElements4, XorElements7, XorElements8, XorElements9};
+use crate::blake3::{XorElements4, XorElements7, XorElements8, XorElements9, XorElements12};
 use crate::{xor_table_eval, xor_table_gen};
 
 macro_rules! xor_table_component {
@@ -154,11 +154,11 @@ mod tests {
 
     use stwo::core::poly::circle::CanonicCoset;
     use stwo_constraint_framework::logup::LookupElements;
-    use stwo_constraint_framework::{assert_constraints_on_polys, FrameworkEval};
+    use stwo_constraint_framework::{FrameworkEval, assert_constraints_on_polys};
 
     use crate::blake3::preprocessed_columns::XorTable;
     use crate::blake3::xor_table::xor12::{
-        generate_interaction_trace, generate_trace, XorAccumulator, XorTableEval,
+        XorAccumulator, XorTableEval, generate_interaction_trace, generate_trace,
     };
 
     #[test]

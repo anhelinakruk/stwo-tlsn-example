@@ -24,7 +24,7 @@ impl FrameworkEval for InputBridgeEval {
         eval.add_to_relation(RelationEntry::new(
             &self.input_relation,
             -E::EF::from(multiplicity),
-            &[input]
+            &[input],
         ));
 
         eval.finalize_logup();
@@ -33,4 +33,3 @@ impl FrameworkEval for InputBridgeEval {
 }
 
 pub type InputBridgeComponent = FrameworkComponent<InputBridgeEval>;
-

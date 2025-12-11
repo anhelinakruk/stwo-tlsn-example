@@ -1,4 +1,4 @@
-use itertools::{chain, Itertools};
+use itertools::{Itertools, chain};
 use num_traits::One;
 use stwo::core::fields::m31::BaseField;
 use stwo::core::fields::qm31::SecureField;

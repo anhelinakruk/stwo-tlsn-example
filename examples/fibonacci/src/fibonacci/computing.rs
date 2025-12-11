@@ -1,7 +1,9 @@
 use num_traits::One;
 use stwo::core::fields::m31::BaseField;
 use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
-use stwo_constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval, RelationEntry, ORIGINAL_TRACE_IDX};
+use stwo_constraint_framework::{
+    EvalAtRow, FrameworkComponent, FrameworkEval, ORIGINAL_TRACE_IDX, RelationEntry,
+};
 
 use super::{LOG_CONSTRAINT_DEGREE, ValueRelation};
 
@@ -48,8 +50,8 @@ impl FrameworkEval for FibEval {
 
         eval.add_to_relation(RelationEntry::new(
             &self.value_relation,
-            -E::EF::from(is_target),  
-            &[a_curr],             
+            -E::EF::from(is_target),
+            &[a_curr],
         ));
 
         eval.finalize_logup();

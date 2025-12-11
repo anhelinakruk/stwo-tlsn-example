@@ -1,22 +1,27 @@
 use std::net::SocketAddr;
 
 use http_body_util::Empty;
-use hyper::{body::Bytes, header, Request, StatusCode, Uri};
+use hyper::{Request, StatusCode, Uri, body::Bytes, header};
 use hyper_util::rt::TokioIo;
 use spansy::{
-    http::{BodyContent, Responses},
     Spanned,
+    http::{BodyContent, Responses},
 };
 use tlsn::{
-    config::{CertificateDer, ProtocolConfig, RootCertStore}, connection::ServerName, hash::HashAlgId, prover::{ProveConfig, ProveConfigBuilder, Prover, ProverConfig, TlsConfig}, transcript::{
-        TranscriptCommitConfig, TranscriptCommitConfigBuilder, TranscriptCommitmentKind,
-    }
+    config::{CertificateDer, ProtocolConfig, RootCertStore},
+    connection::ServerName,
+    hash::HashAlgId,
+    prover::{ProveConfig, ProveConfigBuilder, Prover, ProverConfig, TlsConfig},
+    transcript::{TranscriptCommitConfig, TranscriptCommitConfigBuilder, TranscriptCommitmentKind},
 };
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio_util::compat::{FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
 use tracing::instrument;
 
-use crate::types::{extract_fibonacci_index, received_commitments, received_secrets, verify_fibonacci_index_commitment};
+use crate::types::{
+    extract_fibonacci_index, received_commitments, received_secrets,
+    verify_fibonacci_index_commitment,
+};
 
 pub static CA_CERT_DER: &[u8] = include_bytes!("certs/rootCA.der");
 const MAX_SENT_DATA: usize = 1 << 12;
@@ -105,7 +110,7 @@ pub async fn prover<T: AsyncWrite + AsyncRead + Send + Unpin + 'static>(
     // Reveal the DNS name
     prove_config_builder.server_identity();
 
-     let sent: &[u8] = transcript.sent();
+    let sent: &[u8] = transcript.sent();
     let received: &[u8] = transcript.received();
     let sent_len = sent.len();
     let recv_len = received.len();
@@ -141,11 +146,7 @@ pub async fn prover<T: AsyncWrite + AsyncRead + Send + Unpin + 'static>(
 
     let fibonacci_index = extract_fibonacci_index(received)?;
 
-    verify_fibonacci_index_commitment(
-        fibonacci_index,
-        received_commitment[0],
-        received_secret[0],
-    )?;
+    verify_fibonacci_index_commitment(fibonacci_index, received_commitment[0], received_secret[0])?;
 
     // Extract blinders (16 bytes each)
     let blinder: [u8; 16] = received_secret[0]
@@ -256,8 +257,14 @@ fn reveal_received(
         .ok_or("Could not find challenge_index2 end position")?
         + 1;
 
-    tracing::info!("Index1 as string: {:?}", String::from_utf8_lossy(&received[start_pos1..end_pos1]));
-    tracing::info!("Index2 as string: {:?}", String::from_utf8_lossy(&received[start_pos2..end_pos2]));
+    tracing::info!(
+        "Index1 as string: {:?}",
+        String::from_utf8_lossy(&received[start_pos1..end_pos1])
+    );
+    tracing::info!(
+        "Index2 as string: {:?}",
+        String::from_utf8_lossy(&received[start_pos2..end_pos2])
+    );
 
     // Commit to both indices
     transcript_commitment_builder.commit_recv(&(start_pos1..end_pos1))?;

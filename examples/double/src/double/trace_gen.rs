@@ -1,15 +1,15 @@
-use num_traits::{One};
+use num_traits::One;
+use stwo::core::ColumnVec;
 use stwo::core::fields::m31::BaseField;
 use stwo::core::fields::qm31::SecureField;
 use stwo::core::poly::circle::CanonicCoset;
 use stwo::core::utils::bit_reverse_coset_to_circle_domain_order;
-use stwo::core::ColumnVec;
 use stwo::prover::backend::simd::SimdBackend;
 use stwo::prover::backend::simd::m31::LOG_N_LANES;
 use stwo::prover::backend::simd::qm31::PackedSecureField;
 use stwo::prover::backend::{Col, Column};
-use stwo::prover::poly::circle::CircleEvaluation;
 use stwo::prover::poly::BitReversedOrder;
+use stwo::prover::poly::circle::CircleEvaluation;
 use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
 
@@ -36,13 +36,12 @@ pub fn gen_double_trace(
             col_input.set(row, input);
             col_output.set(row, output);
             col_multiplicity.set(row, BaseField::one());
-        } 
+        }
     }
 
     println!("COL IPUT: {:?}", col_input);
     println!("COL OPUT: {:?}", col_output);
     println!("COL MUL: {:?}", col_multiplicity);
-
 
     bit_reverse_coset_to_circle_domain_order(col_input.as_mut_slice());
     bit_reverse_coset_to_circle_domain_order(col_input.as_mut_slice());
@@ -54,9 +53,9 @@ pub fn gen_double_trace(
         vec![
             CircleEvaluation::new(domain.clone(), col_input.clone()),
             CircleEvaluation::new(domain.clone(), col_output.clone()),
-            CircleEvaluation::new(domain.clone(), col_multiplicity.clone())
+            CircleEvaluation::new(domain.clone(), col_multiplicity.clone()),
         ],
-        output.0
+        output.0,
     )
 }
 

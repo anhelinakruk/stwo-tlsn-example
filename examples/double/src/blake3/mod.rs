@@ -7,12 +7,12 @@ use std::simd::u32x16;
 
 use num_traits::One;
 use stwo::core::channel::Channel;
-use stwo::core::fields::m31::BaseField;
 use stwo::core::fields::FieldExpOps;
+use stwo::core::fields::m31::BaseField;
 use stwo::prover::backend::simd::m31::PackedBaseField;
 use stwo::prover::backend::simd::qm31::PackedSecureField;
-use stwo_constraint_framework::{relation, EvalAtRow, Relation, RelationEntry};
-use xor_table::{xor12, xor4, xor7, xor8, xor9};
+use stwo_constraint_framework::{EvalAtRow, Relation, RelationEntry, relation};
+use xor_table::{xor4, xor7, xor8, xor9, xor12};
 
 pub mod air;
 pub mod blake3;
@@ -22,7 +22,9 @@ pub mod scheduler;
 pub mod xor_table;
 
 // Re-export for integration
-pub use air::{BlakeComponents, BlakeComponentsForIntegration, BlakeStatement0, BlakeStatement1, AllElements};
+pub use air::{
+    AllElements, BlakeComponents, BlakeComponentsForIntegration, BlakeStatement0, BlakeStatement1,
+};
 
 #[cfg(test)]
 mod test_our_blake3;
@@ -42,10 +44,10 @@ pub const ROUND_LOG_SPLIT: [u32; 3] = [2, 1, 0];
 /// These represent the trace size requirements (log2 of number of rows) for each XOR table component.
 /// XOR tables precompute XOR operations for different bit widths to avoid expensive range checks in circuit.
 pub const XOR12_MIN_LOG_SIZE: u32 = 16; // XOR table for 12-bit operations
-pub const XOR9_MIN_LOG_SIZE: u32 = 14;  // XOR table for 9-bit operations
-pub const XOR8_MIN_LOG_SIZE: u32 = 12;  // XOR table for 8-bit operations
-pub const XOR7_MIN_LOG_SIZE: u32 = 10;  // XOR table for 7-bit operations
-pub const XOR4_MIN_LOG_SIZE: u32 = 8;   // XOR table for 4-bit operations
+pub const XOR9_MIN_LOG_SIZE: u32 = 14; // XOR table for 9-bit operations
+pub const XOR8_MIN_LOG_SIZE: u32 = 12; // XOR table for 8-bit operations
+pub const XOR7_MIN_LOG_SIZE: u32 = 10; // XOR table for 7-bit operations
+pub const XOR4_MIN_LOG_SIZE: u32 = 8; // XOR table for 4-bit operations
 
 #[derive(Default)]
 pub struct XorAccums {

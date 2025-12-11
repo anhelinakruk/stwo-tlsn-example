@@ -1,31 +1,31 @@
-use std::simd::u32x16;
-use itertools::{chain, multiunzip, Itertools};
+use itertools::{Itertools, chain, multiunzip};
 use num_traits::Zero;
 use serde::Serialize;
-use stwo::core::air::Component;  
+use std::simd::u32x16;
+use stwo::core::air::Component;
 use stwo::core::channel::{Channel, MerkleChannel};
 use stwo::core::fields::qm31::SecureField;
 use stwo::core::pcs::{CommitmentSchemeVerifier, PcsConfig, TreeVec};
 use stwo::core::poly::circle::CanonicCoset;
 use stwo::core::proof::StarkProof;
 use stwo::core::vcs::MerkleHasher;
-use stwo::core::verifier::{verify, VerificationError};
-use stwo::prover::backend::simd::m31::LOG_N_LANES;
-use stwo::prover::backend::simd::SimdBackend;
+use stwo::core::verifier::{VerificationError, verify};
 use stwo::prover::backend::BackendForChannel;
+use stwo::prover::backend::simd::SimdBackend;
+use stwo::prover::backend::simd::m31::LOG_N_LANES;
 use stwo::prover::poly::circle::PolyOps;
-use stwo::prover::{prove, CommitmentSchemeProver, ComponentProver};
+use stwo::prover::{CommitmentSchemeProver, ComponentProver, prove};
 use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
-use stwo_constraint_framework::{TraceLocationAllocator, PREPROCESSED_TRACE_IDX};
-use tracing::{span, Level};
+use stwo_constraint_framework::{PREPROCESSED_TRACE_IDX, TraceLocationAllocator};
+use tracing::{Level, span};
 
 use super::preprocessed_columns::XorTable;
-use super::round::{blake_round_info, BlakeRoundComponent, BlakeRoundEval};
+use super::round::{BlakeRoundComponent, BlakeRoundEval, blake_round_info};
 use super::scheduler::{BlakeSchedulerComponent, BlakeSchedulerEval};
-use super::xor_table::{xor12, xor4, xor7, xor8, xor9};
+use super::xor_table::{xor4, xor7, xor8, xor9, xor12};
 use crate::blake3::round::RoundElements;
-use crate::blake3::scheduler::{self, blake_scheduler_info, BlakeElements, BlakeInput};
-use crate::blake3::{round, xor_table, BlakeXorElements, XorAccums, N_ROUNDS, ROUND_LOG_SPLIT};
+use crate::blake3::scheduler::{self, BlakeElements, BlakeInput, blake_scheduler_info};
+use crate::blake3::{BlakeXorElements, N_ROUNDS, ROUND_LOG_SPLIT, XorAccums, round, xor_table};
 use crate::bridge::InputRelation;
 
 fn preprocessed_columns(_log_size: u32) -> Vec<PreProcessedColumnId> {
@@ -166,9 +166,16 @@ pub struct BlakeComponents {
 }
 
 impl BlakeComponents {
-    pub fn new(stmt0: &BlakeStatement0, all_elements: &AllElements, stmt1: &BlakeStatement1, input_relation: &crate::bridge::InputRelation, input: u32) -> Self {
-        let tree_span_provider =
-            &mut TraceLocationAllocator::new_with_preprocessed_columns(&preprocessed_columns(stmt0.log_size));
+    pub fn new(
+        stmt0: &BlakeStatement0,
+        all_elements: &AllElements,
+        stmt1: &BlakeStatement1,
+        input_relation: &crate::bridge::InputRelation,
+        input: u32,
+    ) -> Self {
+        let tree_span_provider = &mut TraceLocationAllocator::new_with_preprocessed_columns(
+            &preprocessed_columns(stmt0.log_size),
+        );
 
         Self {
             scheduler_component: BlakeSchedulerComponent::new(
@@ -388,7 +395,11 @@ impl BlakeComponentsForIntegration {
     }
 }
 
-pub fn prove_blake<MC: MerkleChannel>(log_size: u32, input: u32, config: PcsConfig) -> BlakeProof<MC::H>
+pub fn prove_blake<MC: MerkleChannel>(
+    log_size: u32,
+    input: u32,
+    config: PcsConfig,
+) -> BlakeProof<MC::H>
 where
     SimdBackend: BackendForChannel<MC>,
 {
@@ -443,7 +454,7 @@ where
 
     // Scheduler.
     let (scheduler_trace, scheduler_lookup_data, round_inputs) =
-        scheduler::gen_trace(log_size, &blake_inputs, input);  
+        scheduler::gen_trace(log_size, &blake_inputs, input);
 
     // Rounds.
     let mut xor_accums = XorAccums::default();
@@ -539,15 +550,15 @@ where
 
     let mut tree_builder = commitment_scheme.tree_builder();
     let interaction_cols = chain![
-            scheduler_interaction_trace,
-            round_traces.into_iter().flatten(),
-            xor_trace12,
-            xor_trace9,
-            xor_trace8,
-            xor_trace7,
-            xor_trace4,
-        ]
-        .collect_vec();
+        scheduler_interaction_trace,
+        round_traces.into_iter().flatten(),
+        xor_trace12,
+        xor_trace9,
+        xor_trace8,
+        xor_trace7,
+        xor_trace4,
+    ]
+    .collect_vec();
     tree_builder.extend_evals(interaction_cols);
 
     // Statement1.
