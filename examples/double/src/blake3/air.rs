@@ -1,9 +1,8 @@
 use std::simd::u32x16;
-
 use itertools::{chain, multiunzip, Itertools};
 use num_traits::Zero;
 use serde::Serialize;
-use stwo::core::air::Component;
+use stwo::core::air::Component;  
 use stwo::core::channel::{Channel, MerkleChannel};
 use stwo::core::fields::qm31::SecureField;
 use stwo::core::pcs::{CommitmentSchemeVerifier, PcsConfig, TreeVec};
