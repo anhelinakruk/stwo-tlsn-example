@@ -3,7 +3,7 @@ mod trace_gen;
 
 pub use computing::{FibEval, FibComponent};
 use num_traits::One;
-pub use trace_gen::{gen_fib_trace};
+pub use trace_gen::{gen_fib_trace, gen_fib_interaction_trace};
 
 use stwo::core::fields::m31::BaseField;
 use stwo::core::poly::circle::CanonicCoset;
@@ -13,8 +13,11 @@ use stwo::prover::backend::{Col, Column};
 use stwo::prover::poly::circle::CircleEvaluation;
 use stwo::prover::poly::BitReversedOrder;
 use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
+use stwo_constraint_framework::relation;
 
 pub const LOG_CONSTRAINT_DEGREE: u32 = 1;
+pub const VALUE_RELATION_SIZE: usize = 1;
+relation!(ValueRelation, VALUE_RELATION_SIZE);
 
 pub fn gen_is_first_column(
     log_size: u32,

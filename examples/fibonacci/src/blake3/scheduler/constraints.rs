@@ -8,11 +8,11 @@ use stwo::core::fields::FieldExpOps;
 use stwo_constraint_framework::{EvalAtRow, RelationEntry};
 
 use crate::blake3::blake3::MSG_SCHEDULE;
+use crate::fibonacci::ValueRelation;
 
 use super::BlakeElements;
 use crate::blake3::round::RoundElements;
 use crate::blake3::{Fu32, N_ROUNDS, STATE_SIZE};
-use crate::bridge::InputRelation;
 
 /// Applies Blake3 MSG_SCHEDULE permutation `iterations` times to messages
 fn apply_blake3_permutation<F>(messages: &[Fu32<F>; STATE_SIZE], iterations: usize) -> [Fu32<F>; STATE_SIZE]
@@ -37,8 +37,8 @@ pub fn eval_blake_scheduler_constraints<E: EvalAtRow>(
     eval: &mut E,
     blake_lookup_elements: &BlakeElements,
     round_lookup_elements: &RoundElements,
-    input_relation: &InputRelation,
-    _input: u32,
+    value_relation: &ValueRelation,
+    is_first_id: stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId,
 ) {
     let messages: [Fu32<E::F>; STATE_SIZE] = std::array::from_fn(|_| eval_next_u32(eval));
     let states: [[Fu32<E::F>; STATE_SIZE]; N_ROUNDS + 1] =
@@ -110,16 +110,14 @@ pub fn eval_blake_scheduler_constraints<E: EvalAtRow>(
         .collect_vec(),
     ));
 
-    let input = eval.next_trace_mask();
-    let multiplicity = eval.next_trace_mask();
+    let is_first = eval.get_preprocessed_column(is_first_id);
 
     eval.add_to_relation(RelationEntry::new(
-        input_relation,
-        E::EF::from(multiplicity),
-        &[input]
+      value_relation,
+      E::EF::from(is_first),
+      &[messages[0].l.clone()]
     ));
 
-    // Finalize - framework pairs lookups automatically
     eval.finalize_logup_in_pairs();
 
 }

@@ -1046,6 +1046,7 @@ dependencies = [
  "serde_json",
  "stwo",
  "stwo-constraint-framework",
+ "test-log",
  "tracing",
  "tracing-subscriber",
 ]

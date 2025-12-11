@@ -1,16 +1,16 @@
 use num_traits::One;
 use stwo::core::fields::m31::BaseField;
 use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
-use stwo_constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval, ORIGINAL_TRACE_IDX};
+use stwo_constraint_framework::{EvalAtRow, FrameworkComponent, FrameworkEval, RelationEntry, ORIGINAL_TRACE_IDX};
 
-use super::LOG_CONSTRAINT_DEGREE;
+use super::{LOG_CONSTRAINT_DEGREE, ValueRelation};
 
 #[derive(Clone)]
 pub struct FibEval {
     pub log_n_rows: u32,
-    pub fibonacci_value: u32,
     pub is_first_id: PreProcessedColumnId,
     pub is_target_id: PreProcessedColumnId,
+    pub value_relation: ValueRelation,
 }
 
 impl FrameworkEval for FibEval {
@@ -46,18 +46,13 @@ impl FrameworkEval for FibEval {
         // CONSTRAINT 5: Initial value b = 1 at first row
         eval.add_constraint(is_first.clone() * (b_curr.clone() - E::F::one()));
 
-        // CONSTRAINT 8: At target row, verify a = fibonacci_value
-        let expected_value = E::F::from(BaseField::from_u32_unchecked(self.fibonacci_value));
-        eval.add_constraint(is_target.clone() * (a_curr.clone() - expected_value));
+        eval.add_to_relation(RelationEntry::new(
+            &self.value_relation,
+            -E::EF::from(is_target),  
+            &[a_curr],             
+        ));
 
-        // Logup Bridge
-        // eval.add_to_relation(RelationEntry::new(
-        //     &self.index_relation,
-        //     E::EF::from(index_multiplicity), 
-        //     &[index_used]
-        // ));
-
-        // eval.finalize_logup_in_pairs();
+        eval.finalize_logup();
         eval
     }
 }

@@ -20,6 +20,7 @@ use super::BlakeElements;
 use crate::blake3::blake3;
 use crate::blake3::round::{BlakeRoundInput, RoundElements};
 use crate::blake3::{to_felts, N_ROUNDS, N_ROUND_INPUT_FELTS, STATE_SIZE};
+use crate::fibonacci::ValueRelation;
 
 #[derive(Copy, Clone, Default)]
 pub struct BlakeInput {
@@ -45,22 +46,62 @@ impl BlakeSchedulerLookupData {
     }
 }
 
+pub fn prepare_blake_input_from_u32(value: u32) -> BlakeInput {
+      // Pad to 64 bytes
+      let mut padded = [0u8; 64];
+      padded[..4].copy_from_slice(&value.to_le_bytes());
+
+      // Convert to message
+      let message: [u32; 16] = std::array::from_fn(|i| {
+          u32::from_le_bytes([
+              padded[i * 4],
+              padded[i * 4 + 1],
+              padded[i * 4 + 2],
+              padded[i * 4 + 3],
+          ])
+      });
+
+      // Blake3 IV
+      const IV: [u32; 8] = [
+          0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A,
+          0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19,
+      ];
+
+      // Initialize state
+      let mut v = [0u32; 16];
+      v[0..8].copy_from_slice(&IV);
+      v[8..12].copy_from_slice(&IV[0..4]);
+      v[12] = 0;      // counter_low
+      v[13] = 0;      // counter_high  
+      v[14] = 4;      // block_len (4 bytes for u32)
+      v[15] = 0b1011; // CHUNK_START | CHUNK_END | ROOT
+
+      // Convert to SIMD
+      BlakeInput {
+          v: v.map(u32x16::splat),
+          m: message.map(u32x16::splat),
+      }
+  }
+
+
 pub fn gen_trace(
     log_size: u32,
-    inputs: &[BlakeInput],
-    input: u32,
+    fibonacci_value: u32,
 ) -> (
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     BlakeSchedulerLookupData,
     Vec<BlakeRoundInput>,
 ) {
+    let blake_input = prepare_blake_input_from_u32(fibonacci_value);
+    let inputs = vec![blake_input; 1 << (log_size - LOG_N_LANES)];
+
     let _span = span!(Level::INFO, "Scheduler Generation").entered();
     let mut lookup_data = BlakeSchedulerLookupData::new(log_size);
     let mut round_inputs = Vec::with_capacity(inputs.len() * N_ROUNDS);
 
     // Calculate number of columns:
     // 16*2 (messages) + 16*2 (initial_v) + 7*16*2 (v after each round)
-    // = 32 + 32 + 224 + 2 = 290 columns
+    // = 32 + 32 + 224 = 288 columns
     let n_cols = STATE_SIZE * 2 + STATE_SIZE * 2 + N_ROUNDS * STATE_SIZE * 2;
 
     let mut trace = (0..n_cols)
@@ -119,34 +160,6 @@ pub fn gen_trace(
         .enumerate()
         .for_each(|(i, val)| lookup_data.blake_lookups[i].data[vec_row] = val);
 
-
-        let mut col_input = Col::<SimdBackend, BaseField>::zeros(1 << log_size);
-        let mut col_multiplicity = Col::<SimdBackend, BaseField>::zeros(1 << log_size);
-
-        col_input.set(0, BaseField::from_u32_unchecked(input));
-        col_multiplicity.set(0, BaseField::one());
-
-        trace.push(col_input);
-        trace.push(col_multiplicity);
-
-        // let input_col_start = n_cols - 2;
-        // if vec_row == 0 {
-        //     trace[input_col_start].data[vec_row] = unsafe {
-        //         PackedBaseField::from_simd_unchecked(u32x16::splat(input))  // Use parameter!
-        //     };
-        //     trace[input_col_start + 1].data[vec_row] = unsafe {
-        //         PackedBaseField::from_simd_unchecked(u32x16::splat(1))
-        //     };
-        // } else {
-        //     trace[input_col_start].data[vec_row] = PackedBaseField::zero();
-        //     trace[input_col_start + 1].data[vec_row] = PackedBaseField::zero();
-        // }
-
-        // DEBUG: Print first few vec_rows
-        if vec_row < 3 {
-            println!("Blake scheduler vec_row {}: input packed = {:?}", vec_row, trace[n_cols].data[vec_row]);
-            println!("Blake scheduler vec_row {}: multiplicity packed = {:?}", vec_row, trace[n_cols+1].data[vec_row]);
-        }
     }
 
     println!("Blake scheduler total vec_rows: {}", 1 << (log_size - LOG_N_LANES));
@@ -166,7 +179,8 @@ pub fn gen_interaction_trace(
     round_lookup_elements: &RoundElements,
     blake_lookup_elements: &BlakeElements,
     input_trace: &ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
-    input_relation: &crate::bridge::InputRelation,
+    preprocessed: &ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
+    value_relation: &ValueRelation
 ) -> (
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     SecureField,
@@ -218,23 +232,22 @@ pub fn gen_interaction_trace(
     }
 
     {
-        let mut col_gen = logup_gen.new_col();
+      let mut col_gen = logup_gen.new_col();
 
-        let n_cols = input_trace.len();
-        let input_col = &input_trace[n_cols - 2];
-        let multiplicity_col = &input_trace[n_cols - 1];
+      let m0_col = &input_trace[0];
+      let is_first_col = &preprocessed[0]; // First preprocessed column is is_first
 
-        for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {
-            let input_packed = input_col.values.data[vec_row];
-            let multiplicity_packed = multiplicity_col.values.data[vec_row];
+      for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {
+          let m0_packed = m0_col.values.data[vec_row];
+          let is_first_packed = is_first_col.values.data[vec_row];
 
-            let denom = input_relation.combine(&[PackedSecureField::from(input_packed)]);
-            let numerator = PackedSecureField::from(multiplicity_packed);
+          let denom = value_relation.combine(&[PackedSecureField::from(m0_packed)]);
+          let numerator = PackedSecureField::from(is_first_packed);
 
-            col_gen.write_frac(vec_row, numerator, denom);
-        }
+          col_gen.write_frac(vec_row, numerator, denom);
+      }
 
-        col_gen.finalize_col();
+      col_gen.finalize_col();
     }
 
     logup_gen.finalize_last()

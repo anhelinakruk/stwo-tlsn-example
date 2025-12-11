@@ -26,10 +26,11 @@ use super::xor_table::{xor12, xor4, xor7, xor8, xor9};
 use crate::blake3::round::RoundElements;
 use crate::blake3::scheduler::{self, blake_scheduler_info, BlakeElements, BlakeInput};
 use crate::blake3::{round, xor_table, BlakeXorElements, XorAccums, N_ROUNDS, ROUND_LOG_SPLIT};
-use crate::bridge::InputRelation;
+use crate::fibonacci::ValueRelation;
 
-fn preprocessed_columns(_log_size: u32) -> Vec<PreProcessedColumnId> {
+fn preprocessed_columns(log_size: u32) -> Vec<PreProcessedColumnId> {
     vec![
+        scheduler::is_first_column_id(log_size),
         XorTable::new(12, 4, 0).id(),
         XorTable::new(12, 4, 1).id(),
         XorTable::new(12, 4, 2).id(),
@@ -48,8 +49,9 @@ fn preprocessed_columns(_log_size: u32) -> Vec<PreProcessedColumnId> {
     ]
 }
 
-fn preprocessed_columns_log_sizes(_log_size: u32) -> Vec<u32> {
+fn preprocessed_columns_log_sizes(log_size: u32) -> Vec<u32> {
     vec![
+        log_size, // is_first has same log_size as scheduler
         XorTable::new(12, 4, 0).column_bits(),
         XorTable::new(12, 4, 1).column_bits(),
         XorTable::new(12, 4, 2).column_bits(),
@@ -166,7 +168,7 @@ pub struct BlakeComponents {
 }
 
 impl BlakeComponents {
-    pub fn new(stmt0: &BlakeStatement0, all_elements: &AllElements, stmt1: &BlakeStatement1, input_relation: &crate::bridge::InputRelation, input: u32) -> Self {
+    pub fn new(stmt0: &BlakeStatement0, all_elements: &AllElements, stmt1: &BlakeStatement1, value_relation: &ValueRelation, input: u32) -> Self {
         let tree_span_provider =
             &mut TraceLocationAllocator::new_with_preprocessed_columns(&preprocessed_columns(stmt0.log_size));
 
@@ -178,8 +180,8 @@ impl BlakeComponents {
                     blake_lookup_elements: all_elements.blake_elements.clone(),
                     round_lookup_elements: all_elements.round_elements.clone(),
                     claimed_sum: stmt1.scheduler_claimed_sum,
-                    input_relation: input_relation.clone(),
-                    input,
+                    value_relation: value_relation.clone(),
+                    is_first_id: scheduler::is_first_column_id(stmt0.log_size),
                 },
                 stmt1.scheduler_claimed_sum,
             ),
@@ -293,8 +295,7 @@ impl BlakeComponentsForIntegration {
         blake_elements: &BlakeElements,
         round_elements: &RoundElements,
         xor_elements: &BlakeXorElements,
-        input_relation: &crate::bridge::InputRelation,
-        input: u32,
+        value_relation: &ValueRelation,
         scheduler_claimed_sum: SecureField,
         round_claimed_sums: &[SecureField],
         xor12_claimed_sum: SecureField,
@@ -311,8 +312,8 @@ impl BlakeComponentsForIntegration {
                     blake_lookup_elements: blake_elements.clone(),
                     round_lookup_elements: round_elements.clone(),
                     claimed_sum: scheduler_claimed_sum,
-                    input_relation: input_relation.clone(),
-                    input,
+                    value_relation: value_relation.clone(),
+                    is_first_id: scheduler::is_first_column_id(log_size),
                 },
                 scheduler_claimed_sum,
             ),
@@ -425,7 +426,9 @@ where
 
     // Preprocessed trace.
     let span = span!(Level::INFO, "Preprocessed Trace").entered();
+    let blake_is_first_col = scheduler::gen_is_first_column(log_size);
     let mut tree_builder = commitment_scheme.tree_builder();
+    tree_builder.extend_evals([blake_is_first_col.clone()]);
     tree_builder.extend_evals(
         chain![
             XorTable::new(12, 4, 0).generate_constant_trace(),
@@ -443,7 +446,7 @@ where
 
     // Scheduler.
     let (scheduler_trace, scheduler_lookup_data, round_inputs) =
-        scheduler::gen_trace(log_size, &blake_inputs, input);  
+        scheduler::gen_trace(log_size, 55);  
 
     // Rounds.
     let mut xor_accums = XorAccums::default();
@@ -491,15 +494,17 @@ where
 
     // Interaction trace.
     let span = span!(Level::INFO, "Interaction").entered();
-    let input_relation = InputRelation::draw(channel);
+    let value_relation = ValueRelation::draw(channel);
 
+    let blake_preprocessed = vec![blake_is_first_col.clone()];
     let (scheduler_interaction_trace, scheduler_claimed_sum) = scheduler::gen_interaction_trace(
         log_size,
         scheduler_lookup_data,
         &all_elements.round_elements,
         &all_elements.blake_elements,
         &scheduler_trace_for_interaction,
-        &input_relation,
+        &blake_preprocessed,
+        &value_relation,
     );
 
     let (round_traces, round_claimed_sums): (Vec<_>, Vec<_>) = multiunzip(
@@ -568,7 +573,7 @@ where
     // This is a sanity check and doesn't affect proof correctness
 
     // Prove constraints.
-    let components = BlakeComponents::new(&stmt0, &all_elements, &stmt1, &input_relation, input);
+    let components = BlakeComponents::new(&stmt0, &all_elements, &stmt1, &value_relation, input);
     let component_provers = components.component_provers();
 
     let stark_proof = prove(&component_provers, channel, commitment_scheme).unwrap();
@@ -606,13 +611,13 @@ pub fn verify_blake<MC: MerkleChannel>(
 
     // Draw interaction elements.
     let all_elements = AllElements::draw(channel);
-    let input_relation = InputRelation::draw(channel);
+    let value_relation = ValueRelation::draw(channel);
 
     // Interaction trace.
     stmt1.mix_into(channel);
     commitment_scheme.commit(stark_proof.commitments[2], &log_sizes[2], channel);
 
-    let components = BlakeComponents::new(&stmt0, &all_elements, &stmt1, &input_relation, input);
+    let components = BlakeComponents::new(&stmt0, &all_elements, &stmt1, &value_relation, input);
 
     // Check that all sums are correct.
     let claimed_sum = stmt1.scheduler_claimed_sum

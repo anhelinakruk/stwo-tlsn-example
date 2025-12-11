@@ -1,12 +1,18 @@
 use num_traits::{One, Zero};
 use stwo::core::fields::m31::BaseField;
+use stwo::core::fields::qm31::SecureField;
 use stwo::core::poly::circle::CanonicCoset;
 use stwo::core::utils::bit_reverse_coset_to_circle_domain_order;
 use stwo::core::ColumnVec;
+use stwo::prover::backend::simd::m31::LOG_N_LANES;
+use stwo::prover::backend::simd::qm31::PackedSecureField;
 use stwo::prover::backend::simd::SimdBackend;
 use stwo::prover::backend::{Col, Column};
 use stwo::prover::poly::circle::CircleEvaluation;
 use stwo::prover::poly::BitReversedOrder;
+use stwo_constraint_framework::{LogupTraceGenerator, Relation};
+
+use super::ValueRelation;
 
 pub fn gen_fib_trace(
     log_size: u32,
@@ -62,35 +68,35 @@ pub fn gen_fib_trace(
     )
 }
 
-// pub fn gen_fib_interaction_trace(
-//     trace: &ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
-//     index_relation: &IndexRelation,
-// ) -> (
-//     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
-//     SecureField,
-// ) {
-//     let log_size = trace[0].domain.log_size();
-//     let mut logup_gen = LogupTraceGenerator::new(log_size);
+pub fn gen_fib_interaction_trace(
+    main_trace: &ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
+    preprocessed: &ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
+    value_relation: &ValueRelation,
+) -> (
+    ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
+    SecureField,
+) {
+    let log_size = main_trace[0].domain.log_size();
+    let mut logup_gen = LogupTraceGenerator::new(log_size);
 
-//     {
-//         let mut col_gen = logup_gen.new_col();
+    {
+        let mut col_gen = logup_gen.new_col();
 
-//         let index_used_col = &trace[4];
-//         let multiplicity_col = &trace[5];
+        let a_col = &main_trace[0];           
+        let is_target_col = &preprocessed[1];
 
-//         for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {
-//             let index_packed = index_used_col.values.data[vec_row];
-//             let multiplicity_packed = multiplicity_col.values.data[vec_row];
+        for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {
+            let a_packed = a_col.values.data[vec_row];
+            let is_target_packed = is_target_col.values.data[vec_row];
 
-//             let denom = index_relation.combine(&[PackedSecureField::from(index_packed)]);
+            let denom = value_relation.combine(&[PackedSecureField::from(a_packed)]);
+            let numerator = -PackedSecureField::from(is_target_packed);
 
-//             let numerator = PackedSecureField::from(multiplicity_packed);
+            col_gen.write_frac(vec_row, numerator, denom);
+        }
 
-//             col_gen.write_frac(vec_row, numerator, denom);
-//         }
+        col_gen.finalize_col();
+    }
 
-//         col_gen.finalize_col();
-//     }
-
-//     logup_gen.finalize_last()
-// }
+    logup_gen.finalize_last()
+}
