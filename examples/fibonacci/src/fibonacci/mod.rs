@@ -2,7 +2,10 @@ mod computing;
 mod trace_gen;
 
 pub use computing::{FibComponent, FibEval};
+use itertools::{Itertools, chain};
 use num_traits::One;
+use stwo::core::channel::Channel;
+use stwo::core::fields::qm31::SecureField;
 pub use trace_gen::{gen_fib_interaction_trace, gen_fib_trace};
 
 use stwo::core::fields::m31::BaseField;
@@ -13,11 +16,61 @@ use stwo::prover::backend::{Col, Column};
 use stwo::prover::poly::BitReversedOrder;
 use stwo::prover::poly::circle::CircleEvaluation;
 use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
-use stwo_constraint_framework::relation;
+use stwo_constraint_framework::{FrameworkEval, relation};
 
 pub const LOG_CONSTRAINT_DEGREE: u32 = 1;
 pub const VALUE_RELATION_SIZE: usize = 1;
 relation!(ValueRelation, VALUE_RELATION_SIZE);
+
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
+pub struct FibStatement0 {
+    pub log_size: u32,
+    pub fibonacci_index: usize,
+}
+
+impl FibStatement0 {
+    pub fn mix_into(&self, channel: &mut impl Channel) {
+        channel.mix_u64(self.log_size as u64);
+        channel.mix_u64(self.fibonacci_index as u64);
+    }
+
+    pub fn log_sizes(&self) -> stwo::core::pcs::TreeVec<Vec<u32>> {
+        use stwo::core::pcs::TreeVec;
+        use stwo_constraint_framework::PREPROCESSED_TRACE_IDX;
+
+        // Base trace and interaction trace sizes from fib_info
+        let info = fib_info();
+        let sizes = vec![
+            info.mask_offsets.as_cols_ref().map_cols(|_| self.log_size),
+        ];
+
+        let mut log_sizes = TreeVec::concat_cols(sizes.into_iter());
+
+        // Preprocessed trace: is_first, is_target
+        log_sizes[PREPROCESSED_TRACE_IDX] = vec![self.log_size; 2];
+
+        log_sizes
+    }
+}
+
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
+pub struct FibStatement1 {
+    pub fib_claimed_sum: SecureField
+}
+
+impl FibStatement1 {
+    pub fn mix_into(&self, channel: &mut impl Channel) {
+        channel.mix_felts(
+            &chain![
+                [
+                    self.fib_claimed_sum
+                ],
+            ]
+            .collect_vec(),
+        );
+    }
+}
+
 
 pub fn gen_is_first_column(
     log_size: u32,
@@ -64,4 +117,16 @@ pub fn is_target_column_id(log_size: u32) -> PreProcessedColumnId {
     PreProcessedColumnId {
         id: format!("is_target_{}", log_size),
     }
+}
+
+pub fn fib_info() -> stwo_constraint_framework::InfoEvaluator {
+    use stwo_constraint_framework::InfoEvaluator;
+
+    let component = FibEval {
+        log_n_rows: 1,
+        is_first_id: is_first_column_id(1),
+        is_target_id: is_target_column_id(1),
+        value_relation: ValueRelation::dummy(),
+    };
+    component.evaluate(InfoEvaluator::empty())
 }
