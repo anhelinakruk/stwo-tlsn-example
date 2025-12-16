@@ -1,6 +1,6 @@
 use itertools::{Itertools, chain, multiunzip};
 use num_traits::Zero;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use std::simd::u32x16;
 use stwo::core::air::Component;
 use stwo::core::channel::{Channel, MerkleChannel};
@@ -70,7 +70,7 @@ fn preprocessed_columns_log_sizes(log_size: u32) -> Vec<u32> {
     ]
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BlakeStatement0 {
     pub log_size: u32,
 }
@@ -123,6 +123,7 @@ impl AllElements {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct BlakeStatement1 {
     pub scheduler_claimed_sum: SecureField,
     pub round_claimed_sums: Vec<SecureField>,

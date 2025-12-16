@@ -1040,6 +1040,7 @@ checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 name = "fibonacci"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "itertools 0.13.0",
  "num-traits",
  "serde",

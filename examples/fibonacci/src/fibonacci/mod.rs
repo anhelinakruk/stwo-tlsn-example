@@ -19,26 +19,40 @@ use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
 use stwo_constraint_framework::{FrameworkEval, relation};
 
 pub const LOG_CONSTRAINT_DEGREE: u32 = 1;
-pub const VALUE_RELATION_SIZE: usize = 1;
+pub const VALUE_RELATION_SIZE: usize = 1;  // Connection between Fibonacci output and Blake input
 relation!(ValueRelation, VALUE_RELATION_SIZE);
+
+pub const PUBLIC_INPUT_RELATION_SIZE: usize = 2;  // For (a, b) pairs - initial values
+relation!(FibPublicInputRelation, PUBLIC_INPUT_RELATION_SIZE);
+
+pub const PUBLIC_OUTPUT_RELATION_SIZE: usize = 1;  // For target value output
+relation!(FibPublicOutputRelation, PUBLIC_OUTPUT_RELATION_SIZE);
 
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FibStatement0 {
     pub log_size: u32,
     pub fibonacci_index: usize,
+    // Public inputs (initial values in first row):
+    pub initial_a: u32,
+    pub initial_b: u32,
+    // Public output (value at fibonacci_index):
+    pub expected_value: u32,
 }
 
 impl FibStatement0 {
     pub fn mix_into(&self, channel: &mut impl Channel) {
         channel.mix_u64(self.log_size as u64);
         channel.mix_u64(self.fibonacci_index as u64);
+        // Mix public inputs and output
+        channel.mix_u64(self.initial_a as u64);
+        channel.mix_u64(self.initial_b as u64);
+        channel.mix_u64(self.expected_value as u64);
     }
 
     pub fn log_sizes(&self) -> stwo::core::pcs::TreeVec<Vec<u32>> {
         use stwo::core::pcs::TreeVec;
         use stwo_constraint_framework::PREPROCESSED_TRACE_IDX;
 
-        // Base trace and interaction trace sizes from fib_info
         let info = fib_info();
         let sizes = vec![
             info.mask_offsets.as_cols_ref().map_cols(|_| self.log_size),
@@ -46,7 +60,6 @@ impl FibStatement0 {
 
         let mut log_sizes = TreeVec::concat_cols(sizes.into_iter());
 
-        // Preprocessed trace: is_first, is_target
         log_sizes[PREPROCESSED_TRACE_IDX] = vec![self.log_size; 2];
 
         log_sizes
@@ -127,6 +140,8 @@ pub fn fib_info() -> stwo_constraint_framework::InfoEvaluator {
         is_first_id: is_first_column_id(1),
         is_target_id: is_target_column_id(1),
         value_relation: ValueRelation::dummy(),
+        public_input_relation: FibPublicInputRelation::dummy(),
+        public_output_relation: FibPublicOutputRelation::dummy(),
     };
     component.evaluate(InfoEvaluator::empty())
 }

@@ -12,7 +12,7 @@ use stwo::prover::poly::BitReversedOrder;
 use stwo::prover::poly::circle::CircleEvaluation;
 use stwo_constraint_framework::{LogupTraceGenerator, Relation};
 
-use super::ValueRelation;
+use super::{ValueRelation, FibPublicInputRelation, FibPublicOutputRelation};
 
 pub fn gen_fib_trace(
     log_size: u32,
@@ -73,6 +73,8 @@ pub fn gen_fib_interaction_trace(
     main_trace: &ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     preprocessed: &ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     value_relation: &ValueRelation,
+    public_input_relation: &FibPublicInputRelation,
+    public_output_relation: &FibPublicOutputRelation,
 ) -> (
     ColumnVec<CircleEvaluation<SimdBackend, BaseField, BitReversedOrder>>,
     SecureField,
@@ -80,12 +82,45 @@ pub fn gen_fib_interaction_trace(
     let log_size = main_trace[0].domain.log_size();
     let mut logup_gen = LogupTraceGenerator::new(log_size);
 
+    let a_col = &main_trace[0];
+    let b_col = &main_trace[1];
+    let is_first_col = &preprocessed[0];
+    let is_target_col = &preprocessed[1];
+
     {
         let mut col_gen = logup_gen.new_col();
+        for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {
+            let a_packed = a_col.values.data[vec_row];
+            let b_packed = b_col.values.data[vec_row];
+            let is_first_packed = is_first_col.values.data[vec_row];
 
-        let a_col = &main_trace[0];
-        let is_target_col = &preprocessed[1];
+            let denom = public_input_relation.combine(&[
+                PackedSecureField::from(a_packed),
+                PackedSecureField::from(b_packed),
+            ]);
+            let numerator = -PackedSecureField::from(is_first_packed);
 
+            col_gen.write_frac(vec_row, numerator, denom);
+        }
+        col_gen.finalize_col();
+    }
+
+    {
+        let mut col_gen = logup_gen.new_col();
+        for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {
+            let a_packed = a_col.values.data[vec_row];
+            let is_target_packed = is_target_col.values.data[vec_row];
+
+            let denom = public_output_relation.combine(&[PackedSecureField::from(a_packed)]);
+            let numerator = -PackedSecureField::from(is_target_packed);
+
+            col_gen.write_frac(vec_row, numerator, denom);
+        }
+        col_gen.finalize_col();
+    }
+
+    {
+        let mut col_gen = logup_gen.new_col();
         for vec_row in 0..(1 << (log_size - LOG_N_LANES)) {
             let a_packed = a_col.values.data[vec_row];
             let is_target_packed = is_target_col.values.data[vec_row];
@@ -95,7 +130,6 @@ pub fn gen_fib_interaction_trace(
 
             col_gen.write_frac(vec_row, numerator, denom);
         }
-
         col_gen.finalize_col();
     }
 

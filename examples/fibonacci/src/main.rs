@@ -13,18 +13,17 @@ fn main() {
 mod tests {
     use itertools::{Itertools, chain};
     use num_traits::Zero;
-    use stwo::core::{air::Component, channel::MerkleChannel, fields::qm31::SecureField, pcs::CommitmentSchemeVerifier, poly::circle::CanonicCoset, proof::StarkProof, vcs::MerkleHasher, verifier::{VerificationError, verify}};
-    use stwo_constraint_framework::TraceLocationAllocator;
+    use stwo::core::{air::Component, channel::MerkleChannel, fields::qm31::SecureField, pcs::CommitmentSchemeVerifier, poly::circle::CanonicCoset, proof::StarkProof, vcs::{MerkleHasher, blake2_merkle::Blake2sMerkleChannel}, verifier::{VerificationError, verify}};
+    use stwo_constraint_framework::{TraceLocationAllocator, Relation};
 
     use crate::{blake3::{AllElements, BlakeComponentsForIntegration, BlakeStatement0, BlakeStatement1}, fibonacci::{
-        FibComponent, FibEval, FibStatement0, FibStatement1, ValueRelation, gen_fib_interaction_trace, gen_fib_trace, gen_is_first_column, gen_is_target_column, is_first_column_id, is_target_column_id
+        FibComponent, FibEval, FibStatement0, FibStatement1, ValueRelation, FibPublicInputRelation, FibPublicOutputRelation, gen_fib_interaction_trace, gen_fib_trace, gen_is_first_column, gen_is_target_column, is_first_column_id, is_target_column_id
     }};
 
     #[test]
     fn test_fibonacci_blake_prove_verify() {
         use itertools::{Itertools, chain, multiunzip};
         use stwo::core::channel::Blake2sChannel;
-        use stwo::core::fields::qm31::SecureField;
         use stwo::core::pcs::PcsConfig;
         use stwo::core::vcs::blake2_merkle::Blake2sMerkleChannel;
         use stwo::prover::backend::simd::SimdBackend;
@@ -112,6 +111,9 @@ mod tests {
         let fib_statement = FibStatement0 {
             log_size,
             fibonacci_index,
+            initial_a: 0,
+            initial_b: 1,
+            expected_value: fibonacci_value,
         };
         fib_statement.mix_into(prover_channel);
 
@@ -137,11 +139,19 @@ mod tests {
 
         let all_elements = AllElements::draw(prover_channel);
         let value_relation = ValueRelation::draw(prover_channel);
+        let public_input_relation = FibPublicInputRelation::draw(prover_channel);
+        let public_output_relation = FibPublicOutputRelation::draw(prover_channel);
         println!("Challenges drawn");
 
         let fib_preprocessed = vec![fib_is_first_col.clone(), fib_is_target_col.clone()];
         let (fib_interaction_trace, fib_claimed_sum) =
-            gen_fib_interaction_trace(&fib_trace, &fib_preprocessed, &value_relation);
+            gen_fib_interaction_trace(
+                &fib_trace,
+                &fib_preprocessed,
+                &value_relation,
+                &public_input_relation,
+                &public_output_relation,
+            );
         println!("Fibonacci claimed sum: {:?}", fib_claimed_sum);
 
         let blake_preprocessed = vec![blake_is_first_col.clone()];
@@ -263,6 +273,8 @@ mod tests {
                 is_first_id: is_first_column_id(log_size),
                 is_target_id: is_target_column_id(log_size),
                 value_relation: value_relation.clone(),
+                public_input_relation: public_input_relation.clone(),
+                public_output_relation: public_output_relation.clone(),
             },
             fib_claimed_sum,
         );
@@ -302,11 +314,32 @@ mod tests {
 
         println!("PROOF GENERATED!");
 
+        let proof_data = Proof {
+            fib_stmt0: fib_statement.clone(),
+            fib_stmt1: fibonacci_stmt1.clone(),
+            blake_stmt0: blake_stmt0.clone(),
+            blake_stmt1: stmt1.clone(),
+            stark_proof: proof.clone(),
+        };
+
+        let proof_json = serde_json::to_string_pretty(&proof_data)
+            .expect("Failed to serialize proof");
+        std::fs::write("fibonacci_blake_proof.json", &proof_json)
+            .expect("Failed to write proof to file");
+        println!("Proof saved to fibonacci_blake_proof.json");
+
+        let proof_binary = bincode::serialize(&proof_data)
+            .expect("Failed to serialize proof to binary");
+        std::fs::write("fibonacci_blake_proof.bin", &proof_binary)
+            .expect("Failed to write binary proof to file");
+        println!("Binary proof saved to fibonacci_blake_proof.bin ({} bytes)", proof_binary.len());
+
         // Verify
         let verify = verify_proof::<Blake2sMerkleChannel>(Proof { fib_stmt0: fib_statement, fib_stmt1: fibonacci_stmt1, blake_stmt0, blake_stmt1: stmt1, stark_proof: proof });
         verify.unwrap()
     }
 
+    #[derive(Clone, serde::Serialize, serde::Deserialize)]
     pub struct Proof<H: MerkleHasher> {
         fib_stmt0: FibStatement0,
         fib_stmt1: FibStatement1,
@@ -356,6 +389,8 @@ mod tests {
 
         let all_elements = AllElements::draw(channel);
         let value_relation = ValueRelation::draw(channel);
+        let public_input_relation = FibPublicInputRelation::draw(channel);
+        let public_output_relation = FibPublicOutputRelation::draw(channel);
 
         fib_stmt1.mix_into(channel);
         blake_stmt1.mix_into(channel);
@@ -393,6 +428,8 @@ mod tests {
                 is_first_id: is_first_column_id(fib_stmt0.log_size),
                 is_target_id: is_target_column_id(fib_stmt0.log_size),
                 value_relation: value_relation.clone(),
+                public_input_relation: public_input_relation.clone(),
+                public_output_relation: public_output_relation.clone(),
             },
             fib_stmt1.fib_claimed_sum,
         );
@@ -405,7 +442,7 @@ mod tests {
         );
         println!("Components created");
 
-        let claimed_sum = fib_stmt1.fib_claimed_sum
+        let mut claimed_sum = fib_stmt1.fib_claimed_sum
             + blake_stmt1.scheduler_claimed_sum
             + blake_stmt1.round_claimed_sums.iter().sum::<SecureField>()
             + blake_stmt1.xor12_claimed_sum
@@ -413,6 +450,20 @@ mod tests {
             + blake_stmt1.xor8_claimed_sum
             + blake_stmt1.xor7_claimed_sum
             + blake_stmt1.xor4_claimed_sum;
+
+        use stwo::core::fields::m31::BaseField;
+        use stwo::core::fields::FieldExpOps;
+
+        let initial_denom: SecureField = public_input_relation.combine(&[
+            SecureField::from(BaseField::from(fib_stmt0.initial_a)),
+            SecureField::from(BaseField::from(fib_stmt0.initial_b)),
+        ]);
+        claimed_sum += initial_denom.inverse();
+
+        let expected_denom: SecureField = public_output_relation.combine(&[
+            SecureField::from(BaseField::from(fib_stmt0.expected_value)),
+        ]);
+        claimed_sum += expected_denom.inverse();
 
         assert_eq!(claimed_sum, SecureField::zero());
 
@@ -428,5 +479,32 @@ mod tests {
             commitment_scheme,
             stark_proof,
         )
+    }
+
+    #[test]
+    fn test_load_and_verify_proof_from_file() {
+        use stwo::core::vcs::blake2_merkle::Blake2sMerkleHasher;
+
+        // Load proof from binary file
+        let proof_bytes = std::fs::read("fibonacci_blake_proof.bin")
+            .expect("Failed to read proof file. Run test_fibonacci_blake_prove_verify first to generate it.");
+
+        let proof: Proof<Blake2sMerkleHasher> = bincode::deserialize(&proof_bytes)
+            .expect("Failed to deserialize proof");
+
+        println!("✅ Proof loaded from file");
+        println!("   Fibonacci index (from proof): {}", proof.fib_stmt0.fibonacci_index);
+        println!("   Log size: {}", proof.fib_stmt0.log_size);
+
+        // Verify the proof
+        let result = verify_proof::<Blake2sMerkleChannel>(proof);
+
+        match result {
+            Ok(_) => println!("✅ Proof verification PASSED"),
+            Err(e) => {
+                println!("❌ Proof verification FAILED: {:?}", e);
+                panic!("Verification failed: {:?}", e);
+            }
+        }
     }
 }

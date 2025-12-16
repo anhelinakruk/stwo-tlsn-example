@@ -1,18 +1,19 @@
-use num_traits::One;
-use stwo::core::fields::m31::BaseField;
+use num_traits::{One, Zero};
 use stwo_constraint_framework::preprocessed_columns::PreProcessedColumnId;
 use stwo_constraint_framework::{
     EvalAtRow, FrameworkComponent, FrameworkEval, ORIGINAL_TRACE_IDX, RelationEntry,
 };
 
-use super::{LOG_CONSTRAINT_DEGREE, ValueRelation};
+use super::{LOG_CONSTRAINT_DEGREE, ValueRelation, FibPublicInputRelation, FibPublicOutputRelation};
 
 #[derive(Clone)]
 pub struct FibEval {
     pub log_n_rows: u32,
     pub is_first_id: PreProcessedColumnId,
     pub is_target_id: PreProcessedColumnId,
-    pub value_relation: ValueRelation,
+    pub value_relation: ValueRelation,  // Connection to Blake
+    pub public_input_relation: FibPublicInputRelation,  // For public initial values
+    pub public_output_relation: FibPublicOutputRelation,  // For public output value
 }
 
 impl FrameworkEval for FibEval {
@@ -42,12 +43,23 @@ impl FrameworkEval for FibEval {
         // CONSTRAINT 3: Transition b_curr = c_prev (disabled for first row)
         eval.add_constraint(not_first.clone() * (b_curr.clone() - c_prev));
 
-        // CONSTRAINT 4: Initial value a = 0 at first row
-        eval.add_constraint(is_first.clone() * a_curr.clone());
+        // LogUp for public inputs (initial values in first row):
+        // When is_first=1: -1/(a + α*b + Z)
+        eval.add_to_relation(RelationEntry::new(
+            &self.public_input_relation,
+            -E::EF::from(is_first.clone()),
+            &[a_curr.clone(), b_curr.clone()],
+        ));
 
-        // CONSTRAINT 5: Initial value b = 1 at first row
-        eval.add_constraint(is_first.clone() * (b_curr.clone() - E::F::one()));
+        // LogUp for public output (target value):
+        // When is_target=1: -1/(a + Z)
+        eval.add_to_relation(RelationEntry::new(
+            &self.public_output_relation,
+            -E::EF::from(is_target.clone()),
+            &[a_curr.clone()],
+        ));
 
+        // Connection to Blake (unchanged):
         eval.add_to_relation(RelationEntry::new(
             &self.value_relation,
             -E::EF::from(is_target),
